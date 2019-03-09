@@ -3,17 +3,17 @@ import pygame, rtmidi, rtmidi.midiutil
 from collections import namedtuple
 from pygame.locals import *
 
-A = 0
-B = 1
-X = 2
-Y = 3
-LB = 4
-RB = 5
-BACK = 6
-START = 7
-XBOX = 8
-LEFTTHUMB = 9
-RIGHTTHUMB = 10
+BUTTON_A = 0
+BUTTON_B = 1
+BUTTON_X = 2
+BUTTON_Y = 3
+BUTTON_LB = 4
+BUTTON_RB = 5
+BUTTON_BACK = 6
+BUTTON_START = 7
+BUTTON_XBOX = 8
+BUTTON_LEFTTHUMB = 9
+BUTTON_RIGHTTHUMB = 10
 
 MAJOR = 0
 MINOR = 1
@@ -64,21 +64,22 @@ class Instrument(object):
         self._midi_device.open_virtual_port()
         self._most_recent_chord = tuple()
 
-    def play_chord(self, scale_position):
+    def play_chord(self, scale_position, **modifiers):
+
         self.release_chord()
+
         spd = scale_position_data[scale_position]
-        chord = Chord(60 + spd.root_pitch, spd.quality)
+        root = 60 + spd.root_pitch - modifiers.get("do_flatten", 0)
+        chord = Chord(root, spd.quality)
+
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice))
+
         self._most_recent_chord = chord
 
     def release_chord(self):
         for voice in self._most_recent_chord:
             self._midi_device.send_message(NoteOn(voice, velocity=0))
-
-    # def __del__(self):
-    #     print("Closing MIDI port...")
-    #     self._midi_device.close_port()
 
 class App(object):
 
@@ -130,13 +131,21 @@ class App(object):
     def is_cardinal(self, v):
         return 0 in v
 
+    def read_modifier_inputs(self):
+        joystick = self._joysticks[self._joystick_index]
+        return {
+            "do_flatten": joystick.get_button(BUTTON_RB)
+        }
+
     def handle_hat_motion(self, vector):
         if vector != (0,0):
+            # don't register a d-pad press in any of the cardinal directions
+            # if the most recent d-pad event was a diagonal press
+            # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-                self._instrument.play_chord(scale_positions[vector])
+                self._instrument.play_chord(scale_positions[vector], **self.read_modifier_inputs())
         else:
             self._instrument.release_chord()
-            # print(scale_position_names[scale_positions[vector]])
         self._most_recent_hat_vector = vector
 
     def update(self):
