@@ -19,18 +19,24 @@ MAJOR = 0
 MINOR = 1
 DIMINISHED = 2
 
-# horizontal, vertical
-# 1 is up/right, -1 is down/left
-scale_positions = {
-    (0, -1): 0,     # I
-    (0, 1): 0,      # I
-    (-1, 0): 4,     # V
-    (1, 0): 3,      # IV
-    (-1, -1): 5,    # vi
-    (1, -1): 1,     # ii
-    (-1, 1): 6,     # vii*
-    (1, 1): 2       # iii
-}
+mappings = dict(
+    modifiers = dict(
+        do_flatten = BUTTON_RB,
+    ),
+
+    # horizontal, vertical
+    # 1 is up/right, -1 is down/left
+    scale_positions = {
+        (0, -1): 0,     # I
+        (0, 1): 0,      # I
+        (-1, 0): 4,     # V
+        (1, 0): 3,      # IV
+        (-1, -1): 5,    # vi
+        (1, -1): 1,     # ii
+        (-1, 1): 6,     # vii*
+        (1, 1): 2       # iii
+    }
+)
 
 ScalePositionDatum = namedtuple("ScalePositionDatum", ("root_pitch", "quality"))
 scale_position_data = [
@@ -134,7 +140,7 @@ class App(object):
     def read_modifier_inputs(self):
         joystick = self._joysticks[self._joystick_index]
         return {
-            "do_flatten": joystick.get_button(BUTTON_RB)
+            "do_flatten": joystick.get_button(mappings["modifiers"]["do_flatten"])
         }
 
     def handle_hat_motion(self, vector):
@@ -143,7 +149,7 @@ class App(object):
             # if the most recent d-pad event was a diagonal press
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-                self._instrument.play_chord(scale_positions[vector], **self.read_modifier_inputs())
+                self._instrument.play_chord(mappings["scale_positions"][vector], **self.read_modifier_inputs())
         else:
             self._instrument.release_chord()
         self._most_recent_hat_vector = vector
