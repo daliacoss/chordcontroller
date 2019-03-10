@@ -22,6 +22,8 @@ DIMINISHED = 2
 mappings = dict(
     modifiers = dict(
         do_flatten = BUTTON_RB,
+        do_add_voices_1 = BUTTON_X,
+        do_add_voices_2 = BUTTON_Y,
     ),
 
     # horizontal, vertical
@@ -51,13 +53,18 @@ scale_position_data = [
 
 NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
 
-def Chord(root, quality=MAJOR):
+def Chord(root, quality=MAJOR, num_extra_voices=0):
+
+    extra_voices = (root+10, root+14)
+
     if quality == MINOR:
-        return (root, root+3, root+7)
+        triad = (root, root+3, root+7)
     elif quality == DIMINISHED:
-        return (root, root+3, root+6)
+        triad = (root, root+3, root+6)
     else:
-        return (root, root+4, root+7)
+        triad = (root, root+4, root+7)
+
+    return triad + extra_voices[:num_extra_voices]
 
 Vector = namedtuple("Vector", ("x", "y"))
 
@@ -76,7 +83,8 @@ class Instrument(object):
 
         spd = scale_position_data[scale_position]
         root = 60 + spd.root_pitch - modifiers.get("do_flatten", 0)
-        chord = Chord(root, spd.quality)
+        num_extra_voices = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
+        chord = Chord(root, spd.quality, num_extra_voices=num_extra_voices)
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice))
@@ -139,9 +147,7 @@ class App(object):
 
     def read_modifier_inputs(self):
         joystick = self._joysticks[self._joystick_index]
-        return {
-            "do_flatten": joystick.get_button(mappings["modifiers"]["do_flatten"])
-        }
+        return dict(((k, joystick.get_button(v)) for k, v in mappings["modifiers"].items()))
 
     def handle_hat_motion(self, vector):
         if vector != (0,0):
