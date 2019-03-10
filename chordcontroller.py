@@ -104,12 +104,12 @@ class App(object):
         self._most_recent_hat_vector = Vector(0,0)
 
     def setup_pygame(self):
+
         # set SDL to use the dummy NULL video driver, so it doesn't need a
         # windowing system.
         os.environ["SDL_VIDEODRIVER"] = "dummy"
-
         pygame.display.init()
-        screen = pygame.display.set_mode((1, 1))
+        pygame.display.set_mode((1, 1))
 
         # init the joystick control
         pygame.joystick.init()
@@ -150,15 +150,28 @@ class App(object):
         return dict(((k, joystick.get_button(v)) for k, v in mappings["modifiers"].items()))
 
     def handle_hat_motion(self, vector):
+        """
+        maps d-pad vector to the correct Instrument method and returns that
+        method, along with appropriate args and kwargs, without calling it.
+
+        if no Instrument method should be called for this vector, returns None
+        and empty arg collections.
+        """
+        
+        method = None
+        kwargs = {}
+
         if vector != (0,0):
             # don't register a d-pad press in any of the cardinal directions
             # if the most recent d-pad event was a diagonal press
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-                self._instrument.play_chord(mappings["scale_positions"][vector], **self.read_modifier_inputs())
+                method = self._instrument.play_chord
+                kwargs = dict(scale_position=mappings["scale_positions"][vector], **self.read_modifier_inputs())
         else:
-            self._instrument.release_chord()
-        self._most_recent_hat_vector = vector
+            method = self._instrument.release_chord
+        
+        return method, kwargs
 
     def update(self):
         for event in pygame.event.get():
@@ -177,7 +190,11 @@ class App(object):
                 continue
 
             if event.type == JOYHATMOTION and event.hat == 0:
-                self.handle_hat_motion(Vector(*event.value))
+                vector = Vector(*event.value)
+                method, kwargs = self.handle_hat_motion(vector)
+                if method:
+                    method(**kwargs)
+                self._most_recent_hat_vector = vector
 
 app = App()
 app.setup_pygame()
