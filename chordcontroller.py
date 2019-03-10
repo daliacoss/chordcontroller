@@ -24,6 +24,8 @@ mappings = dict(
         do_flatten = BUTTON_RB,
         do_add_voices_1 = BUTTON_X,
         do_add_voices_2 = BUTTON_Y,
+        do_change_quality_1 = BUTTON_A,
+        do_change_quality_2 = BUTTON_B,
     ),
 
     # horizontal, vertical
@@ -55,14 +57,19 @@ NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
 
 def Chord(root, quality=MAJOR, num_extra_voices=0):
 
-    extra_voices = (root+10, root+14)
 
     if quality == MINOR:
         triad = (root, root+3, root+7)
+        extra_voices = (root+10, root+14)
     elif quality == DIMINISHED:
         triad = (root, root+3, root+6)
+        if num_extra_voices > 1:
+            extra_voices = (root+9,)
+        else:
+            extra_voices = (root+10,)
     else:
         triad = (root, root+4, root+7)
+        extra_voices = (root+10, root+14)
 
     return triad + extra_voices[:num_extra_voices]
 
@@ -84,7 +91,14 @@ class Instrument(object):
         spd = scale_position_data[scale_position]
         root = 60 + spd.root_pitch - modifiers.get("do_flatten", 0)
         num_extra_voices = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
-        chord = Chord(root, spd.quality, num_extra_voices=num_extra_voices)
+        if modifiers.get("do_change_quality_1"):
+            quality = not spd.quality
+        elif modifiers.get("do_change_quality_2"):
+            quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
+        else:
+            quality = spd.quality
+
+        chord = Chord(root, quality, num_extra_voices=num_extra_voices)
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice))
