@@ -1,4 +1,4 @@
-import os
+import os, math
 import pygame, rtmidi, rtmidi.midiutil
 from collections import namedtuple
 from pygame.locals import *
@@ -14,10 +14,19 @@ BUTTON_START = 7
 BUTTON_XBOX = 8
 BUTTON_LEFTTHUMB = 9
 BUTTON_RIGHTTHUMB = 10
+AXIS_RTRIGGER = 4
+AXIS_LTRIGGER = 5
+
+MIN_TRIGGER = -1.0
+MAX_TRIGGER = 1.0
 
 MAJOR = 0
 MINOR = 1
 DIMINISHED = 2
+
+DIMINISHED_SEVENTH = 9
+MINOR_SEVENTH = 10
+MAJOR_NINTH = 14
 
 mappings = dict(
     modifiers = dict(
@@ -26,6 +35,10 @@ mappings = dict(
         do_add_voices_2 = BUTTON_Y,
         do_change_quality_1 = BUTTON_A,
         do_change_quality_2 = BUTTON_B,
+        do_set_octave = BUTTON_START,
+    ),
+    axes = dict(
+        velocity = AXIS_RTRIGGER,
     ),
 
     # horizontal, vertical
@@ -55,53 +68,71 @@ scale_position_data = [
 
 NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
 
-def Chord(root, quality=MAJOR, num_extra_voices=0):
-
+def Chord(root, quality=MAJOR, extensions=tuple()):
 
     if quality == MINOR:
         triad = (root, root+3, root+7)
-        extra_voices = (root+10, root+14)
     elif quality == DIMINISHED:
         triad = (root, root+3, root+6)
-        if num_extra_voices > 1:
-            extra_voices = (root+9,)
-        else:
-            extra_voices = (root+10,)
     else:
         triad = (root, root+4, root+7)
-        extra_voices = (root+10, root+14)
 
-    return triad + extra_voices[:num_extra_voices]
+    return triad + tuple(root + x for x in extensions)
 
 Vector = namedtuple("Vector", ("x", "y"))
 
 class Instrument(object):
 
-    def __init__(self):
+    def __init__(self, octave=6):
+        self.octave = octave
+
         self._midi_device = rtmidi.MidiOut(
             name="Chord Controller",
             rtapi=rtmidi.midiutil.get_api_from_environment())
         self._midi_device.open_virtual_port()
         self._most_recent_chord = tuple()
 
+    @property
+    def octave(self):
+        return self._octave
+    
+    @octave.setter
+    def octave(self, o):
+        self._octave = int(o) % 9
+
     def play_chord(self, scale_position, **modifiers):
 
         self.release_chord()
-
+        
         spd = scale_position_data[scale_position]
-        root = 60 + spd.root_pitch - modifiers.get("do_flatten", 0)
-        num_extra_voices = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
+        root = (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
+
         if modifiers.get("do_change_quality_1"):
             quality = not spd.quality
         elif modifiers.get("do_change_quality_2"):
             quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
         else:
             quality = spd.quality
-
-        chord = Chord(root, quality, num_extra_voices=num_extra_voices)
+            
+        velocity = 0x70 - round(modifiers["velocity"]**1.7 * 0x70)
+        # print(velocity)
+        # velocity = hex(127 - round(vel_slider**2 * 127))
+            
+        e = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
+        if e == 1:
+            extensions = (MINOR_SEVENTH,)
+        elif e == 2:
+            if quality == DIMINISHED:
+                extensions = (DIMINISHED_SEVENTH,)
+            else:
+                extensions = (MINOR_SEVENTH, MAJOR_NINTH)
+        else:
+            extensions = tuple()
+        
+        chord = Chord(root, quality, extensions=extensions)
 
         for voice in chord:
-            self._midi_device.send_message(NoteOn(voice))
+            self._midi_device.send_message(NoteOn(voice, velocity=velocity))
 
         self._most_recent_chord = chord
 
@@ -116,6 +147,7 @@ class App(object):
         self._joystick_index = -1
         self._instrument = Instrument()
         self._most_recent_hat_vector = Vector(0,0)
+        self._uncalibrated_axes = set([AXIS_RTRIGGER, AXIS_LTRIGGER])
 
     def setup_pygame(self):
 
@@ -161,7 +193,12 @@ class App(object):
 
     def read_modifier_inputs(self):
         joystick = self._joysticks[self._joystick_index]
-        return dict(((k, joystick.get_button(v)) for k, v in mappings["modifiers"].items()))
+        items = tuple()
+        for input_type, m in [("axes", joystick.get_axis), ("modifiers", joystick.get_button)]:
+            items += tuple((k, m(v)) for k, v in mappings[input_type].items())
+        # dict( ((k, joystick.get_axis(v)) for k, v in mappings["axes"].items()) )
+        # return dict(((k, joystick.get_button(v)) for k, v in mappings["modifiers"].items()))
+        return dict(items)
 
     def handle_hat_motion(self, vector):
         """
@@ -174,6 +211,13 @@ class App(object):
         
         method = None
         kwargs = {}
+        
+        modifier_inputs = self.read_modifier_inputs()
+
+        if AXIS_RTRIGGER in self._uncalibrated_axes:
+            modifier_inputs["velocity"] = 0
+        else:
+            modifier_inputs["velocity"] = (modifier_inputs["velocity"] - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
 
         if vector != (0,0):
             # don't register a d-pad press in any of the cardinal directions
@@ -181,7 +225,7 @@ class App(object):
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
                 method = self._instrument.play_chord
-                kwargs = dict(scale_position=mappings["scale_positions"][vector], **self.read_modifier_inputs())
+                kwargs = dict(scale_position=mappings["scale_positions"][vector], **modifier_inputs)
         else:
             method = self._instrument.release_chord
         
@@ -209,6 +253,9 @@ class App(object):
                 if method:
                     method(**kwargs)
                 self._most_recent_hat_vector = vector
+            
+            elif event.type == JOYAXISMOTION and event.axis in self._uncalibrated_axes:
+                self._uncalibrated_axes.discard(event.axis)
 
 app = App()
 app.setup_pygame()
