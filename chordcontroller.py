@@ -35,7 +35,8 @@ mappings = dict(
         do_add_voices_2 = BUTTON_Y,
         do_change_quality_1 = BUTTON_A,
         do_change_quality_2 = BUTTON_B,
-        do_set_octave = BUTTON_START,
+        do_increase_octave = BUTTON_START,
+        do_decrease_octave = BUTTON_BACK,
     ),
     axes = dict(
         velocity = AXIS_RTRIGGER,
@@ -115,8 +116,6 @@ class Instrument(object):
             quality = spd.quality
             
         velocity = 0x70 - round(modifiers["velocity"]**1.7 * 0x70)
-        # print(velocity)
-        # velocity = hex(127 - round(vel_slider**2 * 127))
             
         e = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
         if e == 1:
@@ -256,6 +255,13 @@ class App(object):
             
             elif event.type == JOYAXISMOTION and event.axis in self._uncalibrated_axes:
                 self._uncalibrated_axes.discard(event.axis)
+            
+            elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_increase_octave"]:
+                self._instrument.octave += 1
+
+            elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_decrease_octave"]:
+                self._instrument.octave -= 1
+
 
 app = App()
 app.setup_pygame()
