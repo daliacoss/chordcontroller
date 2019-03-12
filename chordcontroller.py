@@ -16,6 +16,7 @@ BUTTON_LEFTTHUMB = 9
 BUTTON_RIGHTTHUMB = 10
 AXIS_RTRIGGER = 4
 AXIS_LTRIGGER = 5
+HAT_DPAD = 0
 
 MIN_TRIGGER = -1.0
 MAX_TRIGGER = 1.0
@@ -37,6 +38,7 @@ mappings = dict(
         do_change_quality_2 = BUTTON_B,
         do_increase_octave = BUTTON_START,
         do_decrease_octave = BUTTON_BACK,
+        do_change_tonic = BUTTON_LB,
     ),
     axes = dict(
         velocity = AXIS_RTRIGGER,
@@ -91,7 +93,10 @@ class Instrument(object):
             name="Chord Controller",
             rtapi=rtmidi.midiutil.get_api_from_environment())
         self._midi_device.open_virtual_port()
+
         self._most_recent_chord = tuple()
+        self._tonic = 0
+        self._next_tonic = 0
 
     @property
     def octave(self):
@@ -101,12 +106,23 @@ class Instrument(object):
     def octave(self, o):
         self._octave = int(o) % 9
 
+    @property
+    def tonic(self):
+        return self._tonic
+
+    def set_next_tonic(self, scale_position, flatten_by=0):
+        spd = scale_position_data[scale_position]
+        self._next_tonic = (self._tonic + spd.root_pitch - flatten_by) % 12
+    
+    def commit_tonic(self):
+        self._tonic = self._next_tonic
+
     def play_chord(self, scale_position, **modifiers):
 
         self.release_chord()
         
         spd = scale_position_data[scale_position]
-        root = (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
+        root = self.tonic + (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
 
         if modifiers.get("do_change_quality_1"):
             quality = not spd.quality
@@ -132,7 +148,6 @@ class Instrument(object):
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
-
         self._most_recent_chord = chord
 
     def release_chord(self):
@@ -201,7 +216,7 @@ class App(object):
 
     def handle_hat_motion(self, vector):
         """
-        maps d-pad vector to the correct Instrument method and returns that
+        maps d-pad event to the correct Instrument method and returns that
         method, along with appropriate args and kwargs, without calling it.
 
         if no Instrument method should be called for this vector, returns None
@@ -223,11 +238,17 @@ class App(object):
             # if the most recent d-pad event was a diagonal press
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-                method = self._instrument.play_chord
-                kwargs = dict(scale_position=mappings["scale_positions"][vector], **modifier_inputs)
+                
+                kwargs = dict(scale_position=mappings["scale_positions"][vector])
+
+                if modifier_inputs["do_change_tonic"]:
+                    method = self._instrument.set_next_tonic
+                    kwargs.update(flatten_by=modifier_inputs["do_flatten"])
+                else:
+                    method = self._instrument.play_chord
+                    kwargs.update(**modifier_inputs)
         else:
             method = self._instrument.release_chord
-        
         return method, kwargs
 
     def update(self):
@@ -245,8 +266,10 @@ class App(object):
                 if self._joystick_index < 0 and event.type == JOYBUTTONDOWN:
                     self._joystick_index = joy_index
                 continue
+            
+            joystick = self._joysticks[self._joystick_index]
 
-            if event.type == JOYHATMOTION and event.hat == 0:
+            if event.type == JOYHATMOTION and event.hat == HAT_DPAD:
                 vector = Vector(*event.value)
                 method, kwargs = self.handle_hat_motion(vector)
                 if method:
@@ -262,6 +285,9 @@ class App(object):
             elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_decrease_octave"]:
                 self._instrument.octave -= 1
 
+            # tonic change isn't committed until the change tonic button is released
+            elif event.type == JOYBUTTONUP and event.button == mappings["modifiers"]["do_change_tonic"]:
+                self._instrument.commit_tonic()
 
 app = App()
 app.setup_pygame()
