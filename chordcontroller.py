@@ -42,7 +42,13 @@ mappings = dict(
     ),
     axes = dict(
         velocity = AXIS_RTRIGGER,
+        voicing = AXIS_LTRIGGER,
     ),
+    # if voicing slider value <= [0], use 1st inversion
+    # else if <= [1], use 2nd inversion
+    # etc
+    # each number should be between 0 and 1 inclusive
+    voicing_ranges = [.05, .4, .9, 1],
 
     # horizontal, vertical
     # 1 is up/right, -1 is down/left
@@ -71,7 +77,7 @@ scale_position_data = [
 
 NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
 
-def Chord(root, quality=MAJOR, extensions=tuple()):
+def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
 
     if quality == MINOR:
         triad = (root, root+3, root+7)
@@ -80,13 +86,24 @@ def Chord(root, quality=MAJOR, extensions=tuple()):
     else:
         triad = (root, root+4, root+7)
 
-    return triad + tuple(root + x for x in extensions)
+    chord = triad + tuple(root + x for x in extensions)
+
+    if voicing == 0:
+        return chord
+
+    inversion = tuple()
+    for i, v in enumerate(chord):
+        k = i + voicing
+        octave = k // len(chord)
+        inversion += (chord[k % len(chord)] + octave * 12,)
+
+    return inversion
 
 Vector = namedtuple("Vector", ("x", "y"))
 
 class Instrument(object):
 
-    def __init__(self, octave=6):
+    def __init__(self, octave=5):
         self.octave = octave
 
         self._midi_device = rtmidi.MidiOut(
@@ -101,7 +118,7 @@ class Instrument(object):
     @property
     def octave(self):
         return self._octave
-    
+
     @octave.setter
     def octave(self, o):
         self._octave = int(o) % 9
@@ -113,14 +130,14 @@ class Instrument(object):
     def set_next_tonic(self, scale_position, flatten_by=0):
         spd = scale_position_data[scale_position]
         self._next_tonic = (self._tonic + spd.root_pitch - flatten_by) % 12
-    
+
     def commit_tonic(self):
         self._tonic = self._next_tonic
 
     def play_chord(self, scale_position, **modifiers):
 
         self.release_chord()
-        
+
         spd = scale_position_data[scale_position]
         root = self.tonic + (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
 
@@ -130,9 +147,9 @@ class Instrument(object):
             quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
         else:
             quality = spd.quality
-            
+
         velocity = 0x70 - round(modifiers["velocity"]**1.7 * 0x70)
-            
+
         e = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
         if e == 1:
             extensions = (MINOR_SEVENTH,)
@@ -143,8 +160,8 @@ class Instrument(object):
                 extensions = (MINOR_SEVENTH, MAJOR_NINTH)
         else:
             extensions = tuple()
-        
-        chord = Chord(root, quality, extensions=extensions)
+
+        chord = Chord(root, quality, extensions=extensions, voicing=modifiers.get("voicing", 0))
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
@@ -207,12 +224,24 @@ class App(object):
 
     def read_modifier_inputs(self):
         joystick = self._joysticks[self._joystick_index]
+
         items = tuple()
-        for input_type, m in [("axes", joystick.get_axis), ("modifiers", joystick.get_button)]:
-            items += tuple((k, m(v)) for k, v in mappings[input_type].items())
-        # dict( ((k, joystick.get_axis(v)) for k, v in mappings["axes"].items()) )
-        # return dict(((k, joystick.get_button(v)) for k, v in mappings["modifiers"].items()))
+        for k, axis in mappings["axes"].items():
+            if axis in self._uncalibrated_axes:
+                value = 0
+            else:
+                value = (joystick.get_axis(axis) - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
+            items += ((k, value),)
+
+        items += tuple( (k, joystick.get_button(v)) for k, v in mappings["modifiers"].items() )
+
         return dict(items)
+    
+    def handle_voicing_slider(self, voicing_input):
+        for i, r in enumerate(mappings["voicing_ranges"]):
+            if voicing_input <= r:
+                break
+        return i
 
     def handle_hat_motion(self, vector):
         """
@@ -222,29 +251,25 @@ class App(object):
         if no Instrument method should be called for this vector, returns None
         and empty arg collections.
         """
-        
+
         method = None
         kwargs = {}
-        
-        modifier_inputs = self.read_modifier_inputs()
 
-        if AXIS_RTRIGGER in self._uncalibrated_axes:
-            modifier_inputs["velocity"] = 0
-        else:
-            modifier_inputs["velocity"] = (modifier_inputs["velocity"] - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
+        modifier_inputs = self.read_modifier_inputs()
 
         if vector != (0,0):
             # don't register a d-pad press in any of the cardinal directions
             # if the most recent d-pad event was a diagonal press
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-                
+
                 kwargs = dict(scale_position=mappings["scale_positions"][vector])
 
                 if modifier_inputs["do_change_tonic"]:
                     method = self._instrument.set_next_tonic
                     kwargs.update(flatten_by=modifier_inputs["do_flatten"])
                 else:
+                    modifier_inputs["voicing"] = self.handle_voicing_slider(modifier_inputs["voicing"])
                     method = self._instrument.play_chord
                     kwargs.update(**modifier_inputs)
         else:
@@ -266,7 +291,7 @@ class App(object):
                 if self._joystick_index < 0 and event.type == JOYBUTTONDOWN:
                     self._joystick_index = joy_index
                 continue
-            
+
             joystick = self._joysticks[self._joystick_index]
 
             if event.type == JOYHATMOTION and event.hat == HAT_DPAD:
@@ -275,10 +300,10 @@ class App(object):
                 if method:
                     method(**kwargs)
                 self._most_recent_hat_vector = vector
-            
+
             elif event.type == JOYAXISMOTION and event.axis in self._uncalibrated_axes:
                 self._uncalibrated_axes.discard(event.axis)
-            
+
             elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_increase_octave"]:
                 self._instrument.octave += 1
 
