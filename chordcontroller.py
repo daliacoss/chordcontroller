@@ -1,4 +1,4 @@
-import os, math
+import os, math, time
 import pygame, rtmidi, rtmidi.midiutil
 from collections import namedtuple
 from pygame.locals import *
@@ -12,14 +12,17 @@ BUTTON_RB = 5
 BUTTON_BACK = 6
 BUTTON_START = 7
 BUTTON_XBOX = 8
-BUTTON_LEFTTHUMB = 9
-BUTTON_RIGHTTHUMB = 10
+BUTTON_LTHUMB = 9
+BUTTON_RTHUMB = 10
+AXIS_RTHUMBY = 3
 AXIS_RTRIGGER = 4
 AXIS_LTRIGGER = 5
 HAT_DPAD = 0
 
 MIN_TRIGGER = -1.0
 MAX_TRIGGER = 1.0
+MIN_THUMB = -1.0
+MAX_THUMB = 1.0
 
 MAJOR = 0
 MINOR = 1
@@ -39,10 +42,12 @@ mappings = dict(
         do_increase_octave = BUTTON_START,
         do_decrease_octave = BUTTON_BACK,
         do_change_tonic = BUTTON_LB,
+        do_activate_mod_wheel = BUTTON_RTHUMB,
     ),
     axes = dict(
         velocity = AXIS_RTRIGGER,
         voicing = AXIS_LTRIGGER,
+        mod_wheel = AXIS_RTHUMBY,
     ),
     # if voicing slider value <= [0], use 1st inversion
     # else if <= [1], use 2nd inversion
@@ -76,6 +81,7 @@ scale_position_data = [
 ]
 
 NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
+ModWheel = lambda value, channel=0: (176 + channel, 1, value)
 
 def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
 
@@ -171,6 +177,9 @@ class Instrument(object):
         for voice in self._most_recent_chord:
             self._midi_device.send_message(NoteOn(voice, velocity=0))
 
+    def send_mod_wheel(self, mod_wheel):
+        self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
+
 class App(object):
 
     def __init__(self):
@@ -236,14 +245,14 @@ class App(object):
         items += tuple( (k, joystick.get_button(v)) for k, v in mappings["modifiers"].items() )
 
         return dict(items)
-    
+
     def handle_voicing_slider(self, voicing_input):
         for i, r in enumerate(mappings["voicing_ranges"]):
             if voicing_input <= r:
                 break
         return i
 
-    def handle_hat_motion(self, vector):
+    def handle_hat_motion(self, vector, modifier_inputs):
         """
         maps d-pad event to the correct Instrument method and returns that
         method, along with appropriate args and kwargs, without calling it.
@@ -254,8 +263,6 @@ class App(object):
 
         method = None
         kwargs = {}
-
-        modifier_inputs = self.read_modifier_inputs()
 
         if vector != (0,0):
             # don't register a d-pad press in any of the cardinal directions
@@ -277,7 +284,13 @@ class App(object):
         return method, kwargs
 
     def update(self):
+        modifier_inputs = self.read_modifier_inputs()
+
+        if modifier_inputs["do_activate_mod_wheel"]:
+            self._instrument.send_mod_wheel(modifier_inputs["mod_wheel"])
+
         for event in pygame.event.get():
+
             try:
                 joy_index = getattr(event, "joy")
             except AttributeError:
@@ -296,41 +309,48 @@ class App(object):
 
             if event.type == JOYHATMOTION and event.hat == HAT_DPAD:
                 vector = Vector(*event.value)
-                method, kwargs = self.handle_hat_motion(vector)
+                method, kwargs = self.handle_hat_motion(vector, modifier_inputs)
                 if method:
                     method(**kwargs)
                 self._most_recent_hat_vector = vector
 
-            elif event.type == JOYAXISMOTION and event.axis in self._uncalibrated_axes:
-                self._uncalibrated_axes.discard(event.axis)
+            elif event.type == JOYAXISMOTION:
 
-            elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_increase_octave"]:
-                self._instrument.octave += 1
+                if event.axis in self._uncalibrated_axes:
+                    self._uncalibrated_axes.discard(event.axis)
 
-            elif event.type == JOYBUTTONDOWN and event.button == mappings["modifiers"]["do_decrease_octave"]:
-                self._instrument.octave -= 1
+            elif event.type == JOYBUTTONDOWN:
+                if event.button == mappings["modifiers"]["do_increase_octave"]:
+                    self._instrument.octave += 1
+                elif event.button == mappings["modifiers"]["do_decrease_octave"]:
+                    self._instrument.octave -= 1
 
             # tonic change isn't committed until the change tonic button is released
             elif event.type == JOYBUTTONUP and event.button == mappings["modifiers"]["do_change_tonic"]:
                 self._instrument.commit_tonic()
 
-app = App()
-app.setup_pygame()
-print(app.startup_message())
+def main():
+    app = App()
+    app.setup_pygame()
+    print(app.startup_message())
 
-try:
+    try:
+        is_controller_selected = False
+        clock = pygame.time.Clock()
+        while True:
+            app.update()
 
-    is_controller_selected = False
+            joystick_index = app.joystick_index
+            if joystick_index >= 0 and not is_controller_selected:
+                print ("Using controller {}".format(joystick_index))
+                is_controller_selected = True
+            
+            clock.tick(60)
 
-    while True:
-        app.update()
+    except KeyboardInterrupt:
+        print("\nQuitting...")
+    finally:
+        pygame.quit()
 
-        joystick_index = app.joystick_index
-        if joystick_index >= 0 and not is_controller_selected:
-            print ("Using controller {}".format(joystick_index))
-            is_controller_selected = True
-
-except KeyboardInterrupt:
-    print("\nQuitting...")
-finally:
-    pygame.quit()
+if __name__ == "__main__":
+    main()
