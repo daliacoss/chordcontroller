@@ -1,4 +1,4 @@
-import os, math, time
+import os, math
 import pygame, rtmidi, rtmidi.midiutil
 from collections import namedtuple
 from pygame.locals import *
@@ -32,15 +32,22 @@ DIMINISHED_SEVENTH = 9
 MINOR_SEVENTH = 10
 MAJOR_NINTH = 14
 
+BASS_NONE = 0
+BASS_ROOT = 1       # add an extra voice an octave below the root
+BASS_INVERSION = 2  # add an extra voice an octave below the lowest note
+
 mappings = dict(
-    modifiers = dict(
-        do_flatten = BUTTON_RB,
-        do_add_voices_1 = BUTTON_X,
-        do_add_voices_2 = BUTTON_Y,
-        do_change_quality_1 = BUTTON_A,
-        do_change_quality_2 = BUTTON_B,
+    toggle = dict(
         do_increase_octave = BUTTON_START,
         do_decrease_octave = BUTTON_BACK,
+        do_change_bass = BUTTON_LTHUMB,
+    ),
+    momentary = dict(
+        do_flatten = BUTTON_RB,
+        do_extension_1 = BUTTON_X,
+        do_extension_2 = BUTTON_Y,
+        do_change_quality_1 = BUTTON_A,
+        do_change_quality_2 = BUTTON_B,
         do_change_tonic = BUTTON_LB,
         do_activate_mod_wheel = BUTTON_RTHUMB,
     ),
@@ -120,6 +127,7 @@ class Instrument(object):
         self._most_recent_chord = tuple()
         self._tonic = 0
         self._next_tonic = 0
+        self._bass = 0
 
     @property
     def octave(self):
@@ -128,6 +136,14 @@ class Instrument(object):
     @octave.setter
     def octave(self, o):
         self._octave = int(o) % 9
+
+    @property
+    def bass(self):
+        return self._bass
+
+    @bass.setter
+    def bass(self, b):
+        self._bass = b % 3
 
     @property
     def tonic(self):
@@ -156,7 +172,7 @@ class Instrument(object):
 
         velocity = 0x70 - round(modifiers["velocity"]**1.7 * 0x70)
 
-        e = modifiers.get("do_add_voices_1", 0) + modifiers.get("do_add_voices_2", 0)
+        e = modifiers.get("do_extension_1", 0) + modifiers.get("do_extension_2", 0)
         if e == 1:
             extensions = (MINOR_SEVENTH,)
         elif e == 2:
@@ -168,6 +184,10 @@ class Instrument(object):
             extensions = tuple()
 
         chord = Chord(root, quality, extensions=extensions, voicing=modifiers.get("voicing", 0))
+        if self.bass == BASS_ROOT:
+            chord += (root - 12,)
+        elif self.bass == BASS_INVERSION:
+            chord += (chord[0] - 12,)
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
@@ -194,6 +214,7 @@ class App(object):
         # set SDL to use the dummy NULL video driver, so it doesn't need a
         # windowing system.
         os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
         pygame.display.init()
         pygame.display.set_mode((1, 1))
 
@@ -242,7 +263,7 @@ class App(object):
                 value = (joystick.get_axis(axis) - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
             items += ((k, value),)
 
-        items += tuple( (k, joystick.get_button(v)) for k, v in mappings["modifiers"].items() )
+        items += tuple( (k, joystick.get_button(v)) for k, v in mappings["momentary"].items() )
 
         return dict(items)
 
@@ -320,13 +341,15 @@ class App(object):
                     self._uncalibrated_axes.discard(event.axis)
 
             elif event.type == JOYBUTTONDOWN:
-                if event.button == mappings["modifiers"]["do_increase_octave"]:
+                if event.button == mappings["toggle"]["do_increase_octave"]:
                     self._instrument.octave += 1
-                elif event.button == mappings["modifiers"]["do_decrease_octave"]:
+                elif event.button == mappings["toggle"]["do_decrease_octave"]:
                     self._instrument.octave -= 1
+                elif event.button == mappings["toggle"]["do_change_bass"]:
+                    self._instrument.bass += 1
 
             # tonic change isn't committed until the change tonic button is released
-            elif event.type == JOYBUTTONUP and event.button == mappings["modifiers"]["do_change_tonic"]:
+            elif event.type == JOYBUTTONUP and event.button == mappings["momentary"]["do_change_tonic"]:
                 self._instrument.commit_tonic()
 
 def main():
@@ -344,7 +367,8 @@ def main():
             if joystick_index >= 0 and not is_controller_selected:
                 print ("Using controller {}".format(joystick_index))
                 is_controller_selected = True
-            
+
+            # delay for 1/60 second
             clock.tick(60)
 
     except KeyboardInterrupt:
