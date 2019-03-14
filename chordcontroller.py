@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os, math
-import pygame, rtmidi, rtmidi.midiutil, yaml
+import os, math, sys, argparse
+import pygame, rtmidi, rtmidi.midiutil, yaml, appdirs
 from collections import namedtuple
 from pygame.locals import *
 
@@ -385,15 +385,44 @@ class App(object):
             elif event.type == JOYBUTTONUP and event.button == self.mappings["momentary"]["do_change_tonic"]:
                 self._instrument.commit_tonic()
 
-def main():
-    f = "ChordController.yaml"
+def main(argv=None):
+    """
+    main([argv]) -> None. Run the chordcontroller application.
+    
+    If using sys.argv, do not include the first element.
+    """
+    
+    default_config_file = os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml")
+    
+    parser = argparse.ArgumentParser(description="Turn your Xbox controller into a MIDI keyboard.")
+    parser.add_argument(
+        "--config",
+        default=os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml"),
+        type=str,
+        help="specify a config file in YAML format (default is {})".format(default_config_file)
+    )
+    parser.add_argument(
+        "-q", "--quit-on-parse-failure",
+        action="store_true",
+        help="abort the program if the config file exists but is improperly formatted"
+    )
+    args = parser.parse_args(argv)
+    config = {}
+
     try:
-        with open(f) as stream:
+        with open(args.config) as stream:
             config = yaml.full_load(stream)
-            app = App(**config)
-    except:
-        print("Warning: {} not found. Using default settings...".format(f))
-        app = App()
+    except yaml.YAMLError as e:
+        print("Error parsing {0}: {1}".format(os.path.abspath(args.config), e))
+        if args.quit_on_parse_failure:
+            print("Aborting...")
+            sys.exit(1)
+        else:
+            print("Using default settings...")
+    except IOError:
+        print("{} not found. Using default settings...".format(os.path.abspath(args.config)))
+    finally:
+        app = App(**config)
 
     app.start_pygame()
     print("\n{}".format(app.startup_message()))
@@ -415,6 +444,8 @@ def main():
     except KeyboardInterrupt:
         print("\nQuitting...")
 
+    finally:
+        pygame.quit()
 
 if __name__ == "__main__":
     main()

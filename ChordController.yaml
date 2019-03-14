@@ -1,5 +1,4 @@
-# this section defines the "anchors" that are used later on in this yaml file.
-constants:
+constants: # defines the "anchors" that are used later on in this yaml file
     - &BUTTON_A 0
     - &BUTTON_B 1
     - &BUTTON_X 2
