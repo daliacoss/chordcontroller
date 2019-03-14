@@ -1,23 +1,35 @@
 # ChordController
 # Copyright (C) 2019 Decky Coss
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os, math
-import pygame, rtmidi, rtmidi.midiutil
+import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple
 from pygame.locals import *
+
+MAJOR = 0
+MINOR = 1
+DIMINISHED = 2
+
+DIMINISHED_SEVENTH = 9
+MINOR_SEVENTH = 10
+MAJOR_NINTH = 14
+
+BASS_NONE = 0
+BASS_ROOT = 1       # add an extra voice an octave below the root
+BASS_INVERSION = 2  # add an extra voice an octave below the lowest note
 
 BUTTON_A = 0
 BUTTON_B = 1
@@ -40,57 +52,6 @@ MAX_TRIGGER = 1.0
 MIN_THUMB = -1.0
 MAX_THUMB = 1.0
 
-MAJOR = 0
-MINOR = 1
-DIMINISHED = 2
-
-DIMINISHED_SEVENTH = 9
-MINOR_SEVENTH = 10
-MAJOR_NINTH = 14
-
-BASS_NONE = 0
-BASS_ROOT = 1       # add an extra voice an octave below the root
-BASS_INVERSION = 2  # add an extra voice an octave below the lowest note
-
-mappings = dict(
-    toggle = dict(
-        do_increase_octave = BUTTON_START,
-        do_decrease_octave = BUTTON_BACK,
-        do_change_bass = BUTTON_LTHUMB,
-    ),
-    momentary = dict(
-        do_flatten = BUTTON_RB,
-        do_extension_1 = BUTTON_X,
-        do_extension_2 = BUTTON_Y,
-        do_change_quality_1 = BUTTON_A,
-        do_change_quality_2 = BUTTON_B,
-        do_change_tonic = BUTTON_LB,
-        do_activate_mod_wheel = BUTTON_RTHUMB,
-    ),
-    axes = dict(
-        velocity = AXIS_RTRIGGER,
-        voicing = AXIS_LTRIGGER,
-        mod_wheel = AXIS_RTHUMBY,
-    ),
-    # if voicing slider value <= [0], use 1st inversion
-    # else if <= [1], use 2nd inversion
-    # etc
-    # each number should be between 0 and 1 inclusive
-    voicing_ranges = [.05, .4, .9, 1],
-
-    # horizontal, vertical
-    # 1 is up/right, -1 is down/left
-    scale_positions = {
-        (0, -1): 0,     # I
-        (0, 1): 0,      # I
-        (-1, 0): 4,     # V
-        (1, 0): 3,      # IV
-        (-1, -1): 5,    # vi
-        (1, -1): 1,     # ii
-        (-1, 1): 6,     # vii*
-        (1, 1): 2       # iii
-    }
-)
 
 ScalePositionDatum = namedtuple("ScalePositionDatum", ("root_pitch", "quality"))
 scale_position_data = [
@@ -129,6 +90,14 @@ def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
     return inversion
 
 Vector = namedtuple("Vector", ("x", "y"))
+Vector.SOUTH = Vector(0,-1)
+Vector.NORTH = Vector(0,1)
+Vector.EAST = Vector(1,0)
+Vector.WEST = Vector(-1,0)
+Vector.SOUTHEAST = Vector(1,-1)
+Vector.SOUTHWEST = Vector(-1,-1)
+Vector.NORTHEAST = Vector(1,1)
+Vector.NORTHWEST = Vector(-1,1)
 
 class Instrument(object):
 
@@ -218,19 +187,66 @@ class Instrument(object):
 
 class App(object):
 
-    def __init__(self):
+    def __init__(self, **params):
         self._joysticks = []
         self._joystick_index = -1
         self._instrument = Instrument()
         self._most_recent_hat_vector = Vector(0,0)
         self._uncalibrated_axes = set([AXIS_RTRIGGER, AXIS_LTRIGGER])
 
-    def setup_pygame(self):
+        self.mappings = dict(
+            # if voicing slider value <= [0], use 1st inversion
+            # else if <= [1], use 2nd inversion
+            # etc
+            # each number should be between 0 and 1 inclusive
+            voicing_ranges = [.05, .4, .9, 1],
+
+            # horizontal, vertical
+            # 1 is up/right, -1 is down/left
+            scale_positions = {
+                (0, -1): 0,     # I
+                (0, 1): 0,      # I
+                (-1, 0): 4,     # V
+                (1, 0): 3,      # IV
+                (-1, -1): 5,    # vi
+                (1, -1): 1,     # ii
+                (-1, 1): 6,     # vii*
+                (1, 1): 2       # iii
+            },
+            toggle = dict(
+                do_increase_octave = BUTTON_START,
+                do_decrease_octave = BUTTON_BACK,
+                do_change_bass = BUTTON_LTHUMB,
+            ),
+            momentary = dict(
+                do_flatten = BUTTON_RB,
+                do_extension_1 = BUTTON_X,
+                do_extension_2 = BUTTON_Y,
+                do_change_quality_1 = BUTTON_A,
+                do_change_quality_2 = BUTTON_B,
+                do_change_tonic = BUTTON_LB,
+                do_activate_mod_wheel = BUTTON_RTHUMB,
+            ),
+            axes = dict(
+                velocity = AXIS_RTRIGGER,
+                voicing = AXIS_LTRIGGER,
+                mod_wheel = AXIS_RTHUMBY,
+            ),
+        )
+
+        for k, v in params.get("mappings", {}).items():
+            if k == "voicing_ranges":
+                self.mappings[k] = v
+            elif k == "scale_positions":
+                self.mappings[k] = dict([(getattr(Vector, _k.upper()), _v) for _k, _v in v.items()])
+            elif k in ["toggle", "momentary", "axes"]:
+                self.mappings[k].update(v)
+
+    def start_pygame(self):
 
         # set SDL to use the dummy NULL video driver, so it doesn't need a
         # windowing system.
         os.environ["SDL_VIDEODRIVER"] = "dummy"
-        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
         pygame.display.init()
         pygame.display.set_mode((1, 1))
 
@@ -246,7 +262,7 @@ class App(object):
         return self._joystick_index
 
     def startup_message(self):
-        s = ""
+        s = "Available controllers:\n"
         for i, joystick in enumerate(self._joysticks):
             s += "{0}\t{1}\n".format(i, joystick.get_name())
         return s + "To continue, press any button on the controller you want to use."
@@ -272,19 +288,19 @@ class App(object):
         joystick = self._joysticks[self._joystick_index]
 
         items = tuple()
-        for k, axis in mappings["axes"].items():
+        for k, axis in self.mappings["axes"].items():
             if axis in self._uncalibrated_axes:
                 value = 0
             else:
                 value = (joystick.get_axis(axis) - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
             items += ((k, value),)
 
-        items += tuple( (k, joystick.get_button(v)) for k, v in mappings["momentary"].items() )
+        items += tuple( (k, joystick.get_button(v)) for k, v in self.mappings["momentary"].items() )
 
         return dict(items)
 
     def handle_voicing_slider(self, voicing_input):
-        for i, r in enumerate(mappings["voicing_ranges"]):
+        for i, r in enumerate(self.mappings["voicing_ranges"]):
             if voicing_input <= r:
                 break
         return i
@@ -307,7 +323,7 @@ class App(object):
             # (prevent accidentally playing the wrong chord)
             if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
 
-                kwargs = dict(scale_position=mappings["scale_positions"][vector])
+                kwargs = dict(scale_position=self.mappings["scale_positions"][vector])
 
                 if modifier_inputs["do_change_tonic"]:
                     method = self._instrument.set_next_tonic
@@ -357,21 +373,30 @@ class App(object):
                     self._uncalibrated_axes.discard(event.axis)
 
             elif event.type == JOYBUTTONDOWN:
-                if event.button == mappings["toggle"]["do_increase_octave"]:
+                if event.button == self.mappings["toggle"]["do_increase_octave"]:
                     self._instrument.octave += 1
-                elif event.button == mappings["toggle"]["do_decrease_octave"]:
+                elif event.button == self.mappings["toggle"]["do_decrease_octave"]:
                     self._instrument.octave -= 1
-                elif event.button == mappings["toggle"]["do_change_bass"]:
+                elif event.button == self.mappings["toggle"]["do_change_bass"]:
                     self._instrument.bass += 1
+                # elif event.button == self.mappings["toggle"][""]
 
             # tonic change isn't committed until the change tonic button is released
-            elif event.type == JOYBUTTONUP and event.button == mappings["momentary"]["do_change_tonic"]:
+            elif event.type == JOYBUTTONUP and event.button == self.mappings["momentary"]["do_change_tonic"]:
                 self._instrument.commit_tonic()
 
 def main():
-    app = App()
-    app.setup_pygame()
-    print(app.startup_message())
+    f = "ChordController.yaml"
+    try:
+        with open(f) as stream:
+            config = yaml.full_load(stream)
+            app = App(**config)
+    except:
+        print("Warning: {} not found. Using default settings...".format(f))
+        app = App()
+
+    app.start_pygame()
+    print("\n{}".format(app.startup_message()))
 
     try:
         is_controller_selected = False
@@ -389,8 +414,7 @@ def main():
 
     except KeyboardInterrupt:
         print("\nQuitting...")
-    finally:
-        pygame.quit()
+
 
 if __name__ == "__main__":
     main()
