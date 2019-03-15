@@ -47,10 +47,10 @@ AXIS_RTRIGGER = 4
 AXIS_LTRIGGER = 5
 HAT_DPAD = 0
 
-MIN_TRIGGER = -1.0
-MAX_TRIGGER = 1.0
-MIN_THUMB = -1.0
-MAX_THUMB = 1.0
+# MIN_TRIGGER = -1.0
+# MAX_TRIGGER = 1.0
+# MIN_THUMB = -1.0
+# MAX_THUMB = 1.0
 
 
 ScalePositionDatum = namedtuple("ScalePositionDatum", ("root_pitch", "quality"))
@@ -192,8 +192,15 @@ class App(object):
         self._joystick_index = -1
         self._instrument = Instrument()
         self._most_recent_hat_vector = Vector(0,0)
-        self._uncalibrated_axes = set([AXIS_RTRIGGER, AXIS_LTRIGGER])
 
+        self.calibration = dict(
+            min_trigger = -1.0,
+            max_trigger = 1.0,
+            min_thumb = -1.0,
+            max_thumb = 1.0,
+            uncalibrated_at_start = [AXIS_RTRIGGER, AXIS_LTRIGGER],
+        )
+        self.calibration.update(params.get("calibration"))
         self.mappings = dict(
             # if voicing slider value <= [0], use 1st inversion
             # else if <= [1], use 2nd inversion
@@ -242,6 +249,9 @@ class App(object):
             elif k in ["toggle", "momentary", "axes"]:
                 self.mappings[k].update(v)
 
+        self._uncalibrated_axes = set(self.calibration["uncalibrated_at_start"])
+
+
     def start_pygame(self):
 
         # set SDL to use the dummy NULL video driver, so it doesn't need a
@@ -286,13 +296,14 @@ class App(object):
 
     def read_modifier_inputs(self):
         joystick = self._joysticks[self._joystick_index]
+        min_trigger, max_trigger = self.calibration["min_trigger"], self.calibration["max_trigger"]
 
         items = tuple()
         for k, axis in self.mappings["axes"].items():
             if axis in self._uncalibrated_axes:
                 value = 0
             else:
-                value = (joystick.get_axis(axis) - MIN_TRIGGER) / (MAX_TRIGGER - MIN_TRIGGER)
+                value = (joystick.get_axis(axis) - min_trigger) / (max_trigger - min_trigger)
             items += ((k, value),)
 
         items += tuple( (k, joystick.get_button(v)) for k, v in self.mappings["momentary"].items() )

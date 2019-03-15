@@ -18,10 +18,13 @@ constants: # defines the "anchors" that are used later on in this yaml file
     - &AXIS_RTRIGGER 4
     - &AXIS_LTRIGGER 5
 calibration:
-    MIN_TRIGGER: -1.0
-    MAX_TRIGGER: 1.0
-    MIN_THUMB: -1.0
-    MAX_THUMB: 1.0
+    min_trigger: -1.0
+    max_trigger: 1.0
+    min_thumb: -1.0
+    max_thumb: 1.0
+    uncalibrated_at_start:
+        - *AXIS_RTRIGGER
+        - *AXIS_LTRIGGER
 mappings:
     toggle:
         do_increase_octave: *BUTTON_START
