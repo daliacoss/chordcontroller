@@ -1,2 +1,4 @@
+appdirs==1.4.3
 pygame==1.9.3
 python-rtmidi==1.2.1
+PyYAML==5.1
