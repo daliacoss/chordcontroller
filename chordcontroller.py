@@ -200,7 +200,7 @@ class App(object):
             max_thumb = 1.0,
             uncalibrated_at_start = [AXIS_RTRIGGER, AXIS_LTRIGGER],
         )
-        self.calibration.update(params.get("calibration"))
+        self.calibration.update(params.get("calibration", {}))
         self.mappings = dict(
             # if voicing slider value <= [0], use 1st inversion
             # else if <= [1], use 2nd inversion
