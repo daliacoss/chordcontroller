@@ -128,7 +128,7 @@ class Instrument(object):
 
     @bass.setter
     def bass(self, b):
-        self._bass = b % 3
+        self._bass = int(b) % 3
 
     @property
     def tonic(self):
