@@ -141,10 +141,7 @@ class Instrument(object):
     def commit_tonic(self):
         self._tonic = self._next_tonic
 
-    def play_chord(self, scale_position, **modifiers):
-
-        self.release_chord()
-
+    def construct_chord(self, scale_position, **modifiers):
         spd = scale_position_data[scale_position]
         root = self.tonic + (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
 
@@ -154,8 +151,6 @@ class Instrument(object):
             quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
         else:
             quality = spd.quality
-
-        velocity = 0x70 - round(modifiers["velocity"]**1.7 * 0x70)
 
         e = modifiers.get("do_extension_1", 0) + modifiers.get("do_extension_2", 0)
         if e == 1:
@@ -173,6 +168,15 @@ class Instrument(object):
             chord += (root - 12,)
         elif self.bass == BASS_INVERSION:
             chord += (chord[0] - 12,)
+            
+        return chord
+
+    def play_chord(self, scale_position, **modifiers):
+
+        self.release_chord()
+
+        chord = self.construct_chord(scale_position, **modifiers)
+        velocity = 0x70 - round(modifiers.get("velocity", 0)**1.7 * 0x70)
 
         for voice in chord:
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
@@ -399,12 +403,12 @@ class App(object):
 def main(argv=None):
     """
     main([argv]) -> None. Run the chordcontroller application.
-    
+
     If using sys.argv, do not include the first element.
     """
-    
+
     default_config_file = os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml")
-    
+
     parser = argparse.ArgumentParser(description="Turn your Xbox controller into a MIDI keyboard.")
     parser.add_argument(
         "--config",
