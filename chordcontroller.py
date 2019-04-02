@@ -225,9 +225,11 @@ class App(object):
                 (1, 1): 2       # iii
             },
             toggle = dict(
-                do_increase_octave = BUTTON_START,
-                do_decrease_octave = BUTTON_BACK,
-                do_change_bass = BUTTON_LTHUMB,
+                # do_increase_octave = BUTTON_START,
+                # do_decrease_octave = BUTTON_BACK,
+                # do_change_bass = BUTTON_LTHUMB,
+                octave_plus = Vector.EAST,
+                octave_minus = Vector.WEST,
             ),
             momentary = dict(
                 do_flatten = BUTTON_RB,
@@ -235,12 +237,17 @@ class App(object):
                 do_extension_2 = BUTTON_Y,
                 do_change_quality_1 = BUTTON_A,
                 do_change_quality_2 = BUTTON_B,
-                do_change_tonic = BUTTON_LB,
-                do_activate_mod_wheel = BUTTON_RTHUMB,
+                do_change_tonic = BUTTON_RTHUMB,
+                do_sustain = BUTTON_LB,
+                do_change_octave = BUTTON_START,
+                do_change_harmony = BUTTON_BACK,
+                do_change_bass = BUTTON_LTHUMB,
+                # do_activate_mod_wheel = ,
             ),
             axes = dict(
                 velocity = AXIS_RTRIGGER,
                 voicing = AXIS_LTRIGGER,
+                # mod_wheel = AXIS_LTRIGGER,
                 mod_wheel = AXIS_RTHUMBY,
             ),
         )
@@ -347,15 +354,15 @@ class App(object):
                     modifier_inputs["voicing"] = self.handle_voicing_slider(modifier_inputs["voicing"])
                     method = self._instrument.play_chord
                     kwargs.update(**modifier_inputs)
-        else:
+        elif not modifier_inputs["do_change_tonic"]:
             method = self._instrument.release_chord
         return method, kwargs
 
     def update(self):
         modifier_inputs = self.read_modifier_inputs()
 
-        if modifier_inputs["do_activate_mod_wheel"]:
-            self._instrument.send_mod_wheel(modifier_inputs["mod_wheel"])
+        # if modifier_inputs["do_activate_mod_wheel"]:
+            # self._instrument.send_mod_wheel(modifier_inputs["mod_wheel"])
 
         for event in pygame.event.get():
 
@@ -387,13 +394,13 @@ class App(object):
                 if event.axis in self._uncalibrated_axes:
                     self._uncalibrated_axes.discard(event.axis)
 
-            elif event.type == JOYBUTTONDOWN:
-                if event.button == self.mappings["toggle"]["do_increase_octave"]:
-                    self._instrument.octave += 1
-                elif event.button == self.mappings["toggle"]["do_decrease_octave"]:
-                    self._instrument.octave -= 1
-                elif event.button == self.mappings["toggle"]["do_change_bass"]:
-                    self._instrument.bass += 1
+            # elif event.type == JOYBUTTONDOWN:
+            #     if event.button == self.mappings["toggle"]["do_increase_octave"]:
+            #         self._instrument.octave += 1
+            #     elif event.button == self.mappings["toggle"]["do_decrease_octave"]:
+            #         self._instrument.octave -= 1
+            #     elif event.button == self.mappings["toggle"]["do_change_bass"]:
+            #         self._instrument.bass += 1
                 # elif event.button == self.mappings["toggle"][""]
 
             # tonic change isn't committed until the change tonic button is released

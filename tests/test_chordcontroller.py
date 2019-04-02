@@ -17,15 +17,15 @@ def chord_root_position(request):
 
 def test_chord_inversions(chord_root_position):
     from chordcontroller import Chord
-    
+
     root = chord_root_position[0]
     triad = chord_root_position[:3]
     extensions = tuple(x - root for x in chord_root_position[3:])
-    
+
     for i in range(1, len(chord_root_position)):
         inversion = Chord(root, voicing=i, extensions=extensions)
         assert inversion == chord_root_position[i:] + tuple(x+12 for x in chord_root_position[:i])
-        
+
         # e.g., for a triad, -1 should be the second inversion minus an octave,
         # -2 the first inversion minus an octave, etc
         negative_inversion = Chord(root, voicing = i - len(chord_root_position), extensions=extensions)
@@ -63,7 +63,7 @@ class TestInstrument(object):
     def test_bass_from_bad_string(self, instrument, input_value):
         with pytest.raises(ValueError):
             instrument.bass = input_value
-            
+
     @pytest.mark.parametrize("scale_position,modifiers,expected_value", [
         (0, {}, (60, 64, 67)),
         (0, {"do_flatten":1}, (60-1, 64-1, 67-1)),
