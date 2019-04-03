@@ -230,6 +230,9 @@ class App(object):
                 # do_change_bass = BUTTON_LTHUMB,
                 octave_plus = Vector.EAST,
                 octave_minus = Vector.WEST,
+                harmony_none = BUTTON_A,
+                harmony_third = BUTTON_X,
+                harmony_triad = BUTTON_Y,
             ),
             momentary = dict(
                 do_flatten = BUTTON_RB,
@@ -350,6 +353,8 @@ class App(object):
                 if modifier_inputs["do_change_tonic"]:
                     method = self._instrument.set_next_tonic
                     kwargs.update(flatten_by=modifier_inputs["do_flatten"])
+                # elif modifier_inputs["do_change_harmony"]:
+                    # method = self._instrument.set_next_
                 else:
                     modifier_inputs["voicing"] = self.handle_voicing_slider(modifier_inputs["voicing"])
                     method = self._instrument.play_chord
@@ -358,13 +363,13 @@ class App(object):
             method = self._instrument.release_chord
         return method, kwargs
 
-    def update(self):
+    def update(self, events):
         modifier_inputs = self.read_modifier_inputs()
 
         # if modifier_inputs["do_activate_mod_wheel"]:
             # self._instrument.send_mod_wheel(modifier_inputs["mod_wheel"])
 
-        for event in pygame.event.get():
+        for event in events:
 
             try:
                 joy_index = getattr(event, "joy")
@@ -453,7 +458,7 @@ def main(argv=None):
         is_controller_selected = False
         clock = pygame.time.Clock()
         while True:
-            app.update()
+            app.update(pygame.event.get())
 
             joystick_index = app.joystick_index
             if joystick_index >= 0 and not is_controller_selected:
