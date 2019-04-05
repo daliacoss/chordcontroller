@@ -17,47 +17,93 @@ constants: # defines the "anchors" that are used later on in this yaml file
     - &AXIS_RTHUMBY 3
     - &AXIS_RTRIGGER 4
     - &AXIS_LTRIGGER 5
-calibration:
-    min_trigger: -1.0
-    max_trigger: 1.0
-    min_thumb: -1.0
-    max_thumb: 1.0
-    uncalibrated_at_start:
-        - *AXIS_RTRIGGER
-        - *AXIS_LTRIGGER
+
+axis_calibration:
+    *AXIS_RTRIGGER: &TriggerCalibration
+        min: -1.0
+        max: 1.0
+        uncalibrated_at_start: true
+    *AXIS_LTRIGGER: *TriggerCalibration
+    *AXIS_LTHUMBX: &ThumbCalibration
+        <<: *TriggerCalibration
+        uncalibrated_at_start: false
+    *AXIS_LTHUMBY: *ThumbCalibration
+    *AXIS_RTHUMBX: *ThumbCalibration
+    *AXIS_RTHUMBY: *ThumbCalibration
+
 mappings:
-    toggle:
-        do_increase_octave: *BUTTON_START
-        do_decrease_octave: *BUTTON_BACK
-        do_change_bass: *BUTTON_LTHUMB
-    momentary:
-        do_flatten: *BUTTON_RB
-        do_extension_1: *BUTTON_X
-        do_extension_2: *BUTTON_Y
-        do_change_quality_1: *BUTTON_A
-        do_change_quality_2: *BUTTON_B
-        do_change_tonic: *BUTTON_LB
-        do_activate_mod_wheel: *BUTTON_RTHUMB
-    axes:
-        velocity: *AXIS_RTRIGGER
-        voicing: *AXIS_LTRIGGER
-        mod_wheel: *AXIS_RTHUMBY
-    scale_positions:
-        north: 0
-        east: 3
-        south: 0
-        west: 4
-        northeast: 2
-        southeast: 1
-        southwest: 5
-        northwest: 6
-    # if voicing slider value <= [0] use 1st inversion
-    # else if <= [1] use 2nd inversion
-    # etc
-    # else if 
-    # each number should be between 0 and 1 inclusive
-    voicing_ranges:
-        - .05
-        - .4
-        - .9
-        - 1
+    is_mode_play:
+        do_play_scale_position_0:
+            hat: *HAT_DPAD
+            action: momentary #default
+            direction: [up, down]
+        do_play_scale_position_1:
+            hat: *HAT_DPAD
+            direction: downright
+        do_play_scale_position_2:
+            hat: *HAT_DPAD
+            direction: upright
+        do_play_scale_position_3:
+            hat: *HAT_DPAD
+            direction: right
+        do_play_scale_position_4:
+            hat: *HAT_DPAD
+            direction: left
+        do_play_scale_position_5:
+            hat: *HAT_DPAD
+            direction: downleft
+        do_play_scale_position_6:
+            hat: *HAT_DPAD
+            direction: upleft
+        do_flatten:
+            button: *BUTTON_RB
+            action: momentary #default
+        do_sustain:
+            button: *BUTTON_LB
+        do_inc_extension_1:
+            button: [*BUTTON_X, *BUTTON_Y]
+        do_set_quality_1:
+            button: *BUTTON_A
+        do_set_quality_2:
+            button: *BUTTON_B
+        do_set_velocity:
+            axis: *AXIS_RTRIGGER
+            value_at_min: 127
+            value_at_max: 0
+        do_set_voicing:
+            axis: *AXIS_LTRIGGER
+            value_at_min: 0
+            value_at_max: 3
+            steps:
+                - le .05
+                - le .4
+                - le .9
+                - le 1
+    is_mode_change_octave:
+        master_button: *BUTTON_START
+        master_action: momentary
+        do_inc_octave_1: &DpadLatch
+            hat: *HAT_DPAD
+            direction: right
+            action: latch
+        do_dec_octave_1: 
+            <<: *DpadLatch
+            direction: left
+    is_mode_change_harmony:
+        master_button: *BUTTON_BACK
+        master_action: momentary
+        do_set_harmony_0: # single voice
+            button: *BUTTON_A
+            action: latch
+        do_set_harmony_1: # harmony a third above root
+            button: *BUTTON_X
+            action: latch
+        do_set_harmony_2: # triad
+            button: *BUTTON_Y
+            action: latch
+    is_mode_change_bass:
+        master_button: *BUTTON_LTHUMB
+        master_action: momentary
+    is_mode_change_tonic:
+        master_button: *BUTTON_RTHUMB
+        master_action: momentary
