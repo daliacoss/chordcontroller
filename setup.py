@@ -2,7 +2,7 @@ from setuptools import setup
 setup(
     name="chordcontroller",
     version="0.1",
-    py_modules=["chordcontroller"],
+    packages=["chordcontroller"],
     python_requires="~=3.3",
     install_requires=[
         "appdirs>=1.4.3",

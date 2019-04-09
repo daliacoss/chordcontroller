@@ -1,0 +1,119 @@
+constants: # defines the "anchors" that are used later on in this yaml file
+    - &BUTTON_A 0
+    - &BUTTON_B 1
+    - &BUTTON_X 2
+    - &BUTTON_Y 3
+    - &BUTTON_LB 4
+    - &BUTTON_RB 5
+    - &BUTTON_BACK 6
+    - &BUTTON_START 7
+    - &BUTTON_XBOX 8
+    - &BUTTON_LTHUMB 9
+    - &BUTTON_RTHUMB 10
+    - &HAT_DPAD_NEUTRAL 0_0_0
+    - &HAT_DPAD_UP 0_0_1
+    - &HAT_DPAD_DOWN 0_0_-1
+    - &HAT_DPAD_DOWNRIGHT 0_1_-1
+    - &HAT_DPAD_UPRIGHT 0_1_1
+    - &HAT_DPAD_RIGHT 0_1_0
+    - &HAT_DPAD_LEFT 0_-1_0
+    - &HAT_DPAD_DOWNLEFT 0_-1_-1
+    - &HAT_DPAD_UPLEFT 0_-1_1
+    - &AXIS_LTHUMBX 0
+    - &AXIS_LTHUMBY 1
+    - &AXIS_RTHUMBX 2
+    - &AXIS_RTHUMBY 3
+    - &AXIS_RTRIGGER 4
+    - &AXIS_LTRIGGER 5
+
+axis_calibration:
+    *AXIS_RTRIGGER: &TriggerCalibration
+        min: -1.0
+        max: 1.0
+        uncalibrated_at_start: true
+    *AXIS_LTRIGGER: *TriggerCalibration
+    *AXIS_LTHUMBX: &ThumbCalibration
+        <<: *TriggerCalibration
+        uncalibrated_at_start: false
+    *AXIS_LTHUMBY: *ThumbCalibration
+    *AXIS_RTHUMBX: *ThumbCalibration
+    *AXIS_RTHUMBY: *ThumbCalibration
+
+mappings:
+    mode_default:
+        hats:
+            *HAT_DPAD_UP:
+                - do: play_scale_position 0
+                  action: momentary #default
+            *HAT_DPAD_DOWN:
+                - do: play_scale_position 0
+            *HAT_DPAD_DOWNRIGHT:
+                - do: play_scale_position 1
+            *HAT_DPAD_UPRIGHT:
+                - do: play_scale_position 2
+            *HAT_DPAD_RIGHT:
+                - do: play_scale_position 3
+            *HAT_DPAD_LEFT:
+                - do: play_scale_position 4
+            *HAT_DPAD_DOWNLEFT:
+                - do: play_scale_position 5
+            *HAT_DPAD_UPLEFT:
+                - do: play_scale_position 6
+        buttons:
+            *BUTTON_RB:
+                - do: flatten
+                  action: momentary #default
+            *BUTTON_LB:
+                - do: sustain
+            *BUTTON_X:
+                - do: inc extension 1
+            *BUTTON_Y:
+                - do: inc extension 1
+            *BUTTON_A:
+                - do: set quality 1
+            *BUTTON_B:
+                - do: set quality 2
+        axes:
+            *AXIS_RTRIGGER:
+                - do: set velocity
+                  curve: 1.7
+                  value_at_min: 127
+                  value_at_max: 0
+            *AXIS_LTRIGGER:
+                - do: set voicing
+                  value_at_min: 0
+                  value_at_max: 3
+                  steps:
+                      - .05
+                      - .4
+                      - .9
+                      - 1
+    mode_change_octave:
+        master_button: *BUTTON_START
+        master_action: momentary
+        hats:
+            *HAT_DPAD_RIGHT:
+                - do: inc octave 1
+                  action: latch
+            *HAT_DPAD_LEFT:
+                - do: dec octave 1 
+                  action: latch
+    mode_change_harmony:
+        master_button: *BUTTON_BACK
+        master_action: momentary
+        buttons:
+            *BUTTON_A:
+                - do: set harmony 0 # single voice
+                  action: latch
+            *BUTTON_X:
+                - do: set harmony 1 # harmony a third above root
+                  action: latch
+            *BUTTON_Y:
+                - do: set harmony 2 # triad
+                  action: latch
+    mode_change_bass:
+        master_button: *BUTTON_LTHUMB
+        master_action: momentary
+    mode_change_tonic:
+        master_button: *BUTTON_RTHUMB
+        master_action: momentary
