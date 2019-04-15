@@ -397,21 +397,38 @@ class Instrument(object):
     def send_mod_wheel(self, mod_wheel):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
 
+def commands_from_input_mapping(mapping):
+    commands = []
+    for x in ["hats", "buttons"]:
+        for switch_name, switch_actions in mapping.get(x, {}).items():
+            for action in switch_actions:
+                commands.append(action["do"].split())
+    
+    return commands
+
+class ChordController(object):
+    def __init__(self, input_handler_config, extra_cmd_classes=tuple()):
+        self.input_handler = InputHandler(input_handler_config)
+        self.instrument = Instrument()
+        self.invoker = Invoker(self.instrument, (SetAttribute, IncrementAttribute, *extra_cmd_classes))
+        for k_mode, mode in input_handler.mappings.items():
+            self.invoker.add_commands(commands_from_input_mapping(mode))
+
 class InputHandler(object):
 
-    def __init__(self, mappings, axis_calibration):
+    def __init__(self, config):
         # self._instrument = instrument
 
         # self._joysticks = []
         self._joystick_index = -1
         self._most_recent_hat_vector = {0: Vector(0,0)}
 
-        self.axis_calibration = axis_calibration
-        self.mappings = mappings
+        self.axis_calibration = config["axis_calibration"]
+        self.mappings = config["mappings"]
         self.mode = "mode_default"
 
         self._uncalibrated_axes = set()
-        for k, settings in axis_calibration.items():
+        for k, settings in self.axis_calibration.items():
             if settings.get("uncalibrated_at_start"):
                 self._uncalibrated_axes.add(k)
 
@@ -537,10 +554,10 @@ class InputHandler(object):
 
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
                 for data in keymap.get("buttons", {}).get(event.button, []):
-                    action = data.get("action", "momentary")
-                    if event.type == JOYBUTTONDOWN and action in ["momentary", "latch"]:
+                    behavior = data.get("behavior", "momentary")
+                    if event.type == JOYBUTTONDOWN and behavior in ["momentary", "latch"]:
                         to_do.append(shlex.split(data["do"]))
-                    elif event.type == JOYBUTTONUP and action == "momentary":
+                    elif event.type == JOYBUTTONUP and behavior == "momentary":
                         to_undo.append(shlex.split(data["do"]))
 
             elif event.type == JOYHATMOTION:
@@ -555,10 +572,10 @@ class InputHandler(object):
                     key_vector = Vector(event.value)
 
                 for data in keymap.get("hats", {}).get("{0}_{1}_{2}".format(event.hat, key_vector.x, key_vector.y), []):
-                    action = data.get("action", "momentary")
-                    if not is_neutral and action in ["momentary", "latch"]:
+                    behavior = data.get("behavior", "momentary")
+                    if not is_neutral and behavior in ["momentary", "latch"]:
                         to_do.append(shlex.split(data["do"]))
-                    elif is_neutral and action == "momentary":
+                    elif is_neutral and behavior == "momentary":
                         to_undo.append(shlex.split(data["do"]))
                 
                 self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL

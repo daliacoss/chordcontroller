@@ -74,7 +74,7 @@ def main(argv=None):
         print("{} not found. Using default settings...".format(os.path.abspath(args.config)))
 
     finally:
-        input_handler = InputHandler(config["mappings"], config["axis_calibration"])
+        input_handler = InputHandler(config)
         instrument = Instrument()
 
     initialize()

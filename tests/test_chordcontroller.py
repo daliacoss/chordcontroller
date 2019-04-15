@@ -4,7 +4,9 @@ from pygame.locals import *
 
 os.environ["RTMIDI_API"] = "RTMIDI_DUMMY"
 
-Event = namedtuple("Event", ["type", ])
+############
+# FIXTURES #
+############
 
 class Event(object):
     def __init__(self, type, **params):
@@ -16,6 +18,18 @@ class ButtonEvent(Event):
         super().__init__(type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
 
 @pytest.fixture
+def mapping():
+    return {
+        "hats": {
+            "0_0_1": [{"do": "set octave 4"}],
+            "0_0_-1": [{"do": "set octave 5"}],
+        },
+        "buttons": {
+            "0": [{"do": "play_scale_position 1"}]
+        }
+    }
+
+@pytest.fixture
 def instrument():
     import chordcontroller
     return chordcontroller.Instrument(octave=5)
@@ -25,7 +39,7 @@ def input_handler():
     from chordcontroller import InputHandler
     with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
         config = yaml.full_load(defaults)
-    return InputHandler(config["mappings"], config["axis_calibration"])
+    return InputHandler(config)
 
 @pytest.fixture(params=[
     (60, 0, tuple(), 0),
@@ -34,6 +48,10 @@ def input_handler():
 def chord_root_position(request):
     import chordcontroller
     return chordcontroller.Chord(*request.param)
+
+#########
+# TESTS #
+#########
 
 def test_chord_inversions(chord_root_position):
     from chordcontroller import Chord
@@ -126,6 +144,14 @@ class TestCommandsAndInvoker(object):
         assert not invoker.undo("set", "button", 0)
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
+
+def test_commands_from_input_mapping(mapping):
+    from chordcontroller import commands_from_input_mapping
+    
+    cmds = commands_from_input_mapping(mapping)
+    expected = (("set", "octave", "4"), ("set", "octave", "5"), ("play_scale_position", "1"))
+    for i, c in enumerate(cmds):
+        assert tuple(c) in expected
 
 class TestInstrument(object):
 
