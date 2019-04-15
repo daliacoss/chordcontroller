@@ -61,7 +61,7 @@ mappings:
                 - do: play_scale_position 6
         buttons:
             *BUTTON_RB:
-                - do: flatten
+                - do: set tonic_offset -1
                   action: momentary #default
             *BUTTON_LB:
                 - do: sustain

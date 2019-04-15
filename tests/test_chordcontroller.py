@@ -1,11 +1,31 @@
-import pytest, os
+import pytest, os, pkg_resources, yaml
+from collections import namedtuple
+from pygame.locals import *
 
 os.environ["RTMIDI_API"] = "RTMIDI_DUMMY"
+
+Event = namedtuple("Event", ["type", ])
+
+class Event(object):
+    def __init__(self, type, **params):
+        self.__dict__ = params
+        self.type = type
+
+class ButtonEvent(Event):
+    def __init__(self, button, is_down=True, joy=0):
+        super().__init__(type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
 
 @pytest.fixture
 def instrument():
     import chordcontroller
     return chordcontroller.Instrument(octave=5)
+    
+@pytest.fixture
+def input_handler():
+    from chordcontroller import InputHandler
+    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
+        config = yaml.full_load(defaults)
+    return InputHandler(config["mappings"], config["axis_calibration"])
 
 @pytest.fixture(params=[
     (60, 0, tuple(), 0),
@@ -30,6 +50,82 @@ def test_chord_inversions(chord_root_position):
         # -2 the first inversion minus an octave, etc
         negative_inversion = Chord(root, voicing = i - len(chord_root_position), extensions=extensions)
         assert inversion == tuple(x + 12 for x in negative_inversion)
+
+class TestCommandsAndInvoker(object):
+
+    def test_set_attribute(self):
+        from chordcontroller import SetAttribute
+        
+        obj = ButtonEvent(0)
+        cmd = SetAttribute(obj, "button", 3)
+        assert obj.button == 0
+
+        cmd.execute()
+        assert obj.button == 3
+
+        assert cmd.group_by(True) == ("set", obj, "button")
+        
+        assert not cmd.revert
+
+    def test_inc_attribute(self):
+        from chordcontroller import IncrementAttribute
+
+        obj = ButtonEvent(1)
+        cmd = IncrementAttribute(obj, "button", 2)
+        assert obj.button == 1
+
+        cmd.execute()
+        assert obj.button == 3
+
+        assert cmd.group_by(True) == ("inc", obj, "button", 2)
+    
+    def test_invoker(self):
+        from chordcontroller import SetAttribute, IncrementAttribute, Invoker
+        
+        obj = ButtonEvent(-1)
+        invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
+        
+        cmd_set_button_0 = invoker.add_command("set", "button", 0)
+        cmd_set_button_1 = invoker.add_command("set", "button", 1)
+        cmd_set_button_2 = invoker.add_command("set", "button", 2)
+        cmd_set_button_1000 = invoker.add_command("set", "button", 1000)
+        assert obj.button == -1
+
+        invoker.do("set", "button", 0)
+        assert obj.button == 0
+
+        invoker.do("set", "button", 1)
+        assert obj.button == 1
+
+        invoker.do("set", "button", 2)
+        assert obj.button == 2
+        assert invoker.get_command_stack(("set", "button")) == (
+            cmd_set_button_2, cmd_set_button_1, cmd_set_button_0)
+        
+        # undoing a command below the top of the undo stack should remove
+        # it from the stack, but should have no effect on the button value
+        # if there is no revert method
+        assert invoker.undo("set", "button", 1) is cmd_set_button_1
+        assert obj.button == 2
+        assert invoker.get_command_stack(("set", "button")) == (
+            cmd_set_button_2, cmd_set_button_0)
+
+        # undoing a command that was never executed should have no effect
+        assert not invoker.undo("set", "button", 1000)
+        assert obj.button == 2
+        assert invoker.get_command_stack(("set", "button")) == (
+            cmd_set_button_2, cmd_set_button_0)
+        
+        # undoing the most recent command should change the button value
+        assert invoker.undo("set", "button", 2) is cmd_set_button_2
+        assert obj.button == 0
+        assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
+
+        # undoing the only command in the stack should have no effect if
+        # the command has no revert method
+        assert not invoker.undo("set", "button", 0)
+        assert obj.button == 0
+        assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
 class TestInstrument(object):
 
@@ -71,3 +167,21 @@ class TestInstrument(object):
     def test_construct_chord(self, instrument, scale_position, modifiers, expected_value):
         chord = instrument.construct_chord(scale_position, **modifiers)
         assert chord == expected_value
+
+class TestInputHandler(object):
+
+    def test_button_press(self, input_handler):
+
+        response = input_handler.update([ButtonEvent(0)])
+        assert not response["to_undo"]
+
+        expected_to_do = ["set", "quality", "1"]
+        for i, x in enumerate(expected_to_do):
+            assert response["to_do"][0][i] == x
+
+        response = input_handler.update([ButtonEvent(0, is_down=False)])
+        assert not response["to_do"]
+
+        expected_to_do = ["set", "quality", "1"]
+        for i, x in enumerate(expected_to_do):
+            assert response["to_undo"][0][i] == x

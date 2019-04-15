@@ -25,7 +25,11 @@ def initialize():
         joy = pygame.joystick.Joystick(i)
         joy.init()
         joysticks.append(joy)
-    
+
+    if not joysticks:
+        print("No controllers found. Please connect a game controller before starting.\nAborting...")
+        sys.exit(1)
+
     print(startup_message(joysticks))
 
 def main(argv=None):
@@ -79,7 +83,11 @@ def main(argv=None):
         is_controller_selected = False
         clock = pygame.time.Clock()
         while True:
-            input_handler.update(pygame.event.get())
+            response = input_handler.update(pygame.event.get())
+            for td in response["to_do"]:
+                getattr(instrument, td[0])(*td[1:])
+            for tu in response["to_undo"]:
+                instrument.undo(*td)
 
             joystick_index = input_handler.joystick_index
             if joystick_index >= 0 and not is_controller_selected:

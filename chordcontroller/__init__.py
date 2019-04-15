@@ -16,7 +16,7 @@
 
 import math, os, shlex
 import pygame, rtmidi, rtmidi.midiutil
-from collections import namedtuple
+from collections import namedtuple, deque
 from pygame.locals import *
 
 MAJOR = 0
@@ -100,10 +100,173 @@ Vector.UPRIGHT = Vector(1,1)
 Vector.UPLEFT = Vector(-1,1)
 Vector.NEUTRAL = Vector(0,0)
 
+class Command(object):
+
+    def __init__(self, obj):
+        self._obj = obj
+
+    def execute(self):
+        """
+        Execute the command.
+        """
+        raise NotImplementedError
+    
+    def group_by(self, include_obj=False):
+        """
+        Return this command object's group_by attribute. This can be used by
+        an invoker to determine which undo stack to place the object in.
+        """
+ 
+        raise NotImplementedError
+    
+    # def name(self):
+        # return self.__class__.__name__
+
+    name = "command"
+    revert = False
+
+class SetAttribute(Command):
+
+    name = "set"
+
+    def __init__(self, obj, key, value):
+        super().__init__(obj)
+        self._key = key
+        self._value = value
+    
+    def group_by(self, include_obj=False):
+        if include_obj:
+            rest = (self._obj, self._key)
+        else:
+            rest = (self._key,)
+        return (self.name, *rest)
+
+    @property
+    def key(self):
+        return self._key
+    
+    @property
+    def value(self):
+        return self._value
+        
+    def execute(self):
+        setattr(self._obj, self._key, self._value)
+
+class IncrementAttribute(SetAttribute):
+
+    name = "inc"
+
+    def execute(self):
+        setattr(self._obj, self._key, getattr(self._obj, self._key) + self._value)
+
+    def revert(self):
+        setattr(self._obj, self._key, getattr(self._obj, self._key) - self._value)
+
+    def group_by(self, include_obj=False):
+
+        rest = (self._key, self._value)
+        if include_obj:
+            rest = (self._obj, *rest)
+        return (self.name, *rest)
+
+class Invoker(object):
+
+    def __init__(self, obj, command_classes=None):
+        self._obj = obj
+        # self._command_classes = command_classes or {}
+        self._commands = {}
+        self._command_stacks = {}
+        self._command_classes = {}
+        for cmd_class in command_classes or []:
+            self.add_command_class(cmd_class)
+    
+    def add_command_class(self, cmd_class):
+        self._command_classes[cmd_class.name] = cmd_class
+    
+    def get_command_class(self, cmd_name):
+
+        cmd_class = self._command_classes.get(cmd_name)
+        if not cmd_class:
+            raise KeyError(
+                "{} is not a registered command. Did you forget to call {}.add_command_class?".format(
+                    cmd_name, self.__class__.__name__))
+
+        return cmd_class
+    
+    def add_command(self, cmd_name, *cmd_arg):
+
+        cmd_data = self.command_data(cmd_name, *cmd_arg)
+        command = cmd_data["class"](self._obj, *cmd_arg)
+        self._commands[cmd_data["id"]] = command
+        self._command_stacks.setdefault(command.group_by(), tuple())
+
+        return command
+    
+    def remove_command(self, cmd_name, *cmd_arg):
+        cmd_data = self.command_data(cmd_name, *cmd_arg)
+        self._commands.pop(cmd_data["id"])
+        # TODO: remove from stack
+    
+    def command_data(self, cmd_name, *cmd_arg):
+        d = {
+            "class": self.get_command_class(cmd_name),
+            "id": (cmd_name, *cmd_arg)
+        }
+
+        if cmd_arg and not d["class"].revert:
+            # d["stack_id"] = d["id"][:-1]
+            d["has_revert"] = False
+        else:
+            # d["stack_id"] = d["id"]
+            d["has_revert"] = True
+            
+        return d
+    
+    def get_command_stack(self, stack_id):
+        return self._command_stacks[stack_id]
+
+    def do(self, cmd_name, *cmd_arg):
+        cmd_data = self.command_data(cmd_name, *cmd_arg)
+        cmd = self._commands[cmd_data["id"]]
+        cmd.execute()
+        
+        stack_id = cmd.group_by()
+        new_stack = (cmd,) + self._command_stacks[stack_id]
+        self._command_stacks[stack_id] = new_stack
+    
+    def undo(self, cmd_name, *cmd_arg):
+
+        cmd_data = self.command_data(cmd_name, *cmd_arg)
+        command = self._commands[cmd_data["id"]]
+        stack_id = command.group_by()
+        stack = self._command_stacks.get(stack_id)
+
+        #stack either doesn't exist or is empty
+        if not stack:
+            return
+
+        for i_cmd, to_undo in enumerate(stack):
+            if command is to_undo:
+                break
+        else:
+            return
+            
+        # run the revert method if it exists. otherwise, if the command to undo
+        # is at the top of the stack, run the previous command to restore the
+        # previous state
+        if to_undo.revert:
+            to_undo.revert()
+        elif not i_cmd:
+            if len(stack) == 1:
+                return
+            stack[1].execute()
+
+        self._command_stacks[stack_id] = stack[:i_cmd] + stack[i_cmd+1:]
+        return to_undo
+
 class Instrument(object):
 
     def __init__(self, octave=5):
-        self.octave = octave
 
         self._midi_device = rtmidi.MidiOut(
             name="Chord Controller",
@@ -111,8 +274,16 @@ class Instrument(object):
         self._midi_device.open_virtual_port()
 
         self._most_recent_chord = tuple()
-        self._tonic = 0
-        self._bass = 0
+        # self._prev = {}
+        # _prev = []
+        # self._next = {}
+
+        self.octave = octave
+        self.tonic = 0
+        self.tonic_offset = 0
+        self.bass = 0
+        self.harmony = 0
+        self.voicing = 0
 
     @property
     def octave(self):
@@ -143,7 +314,7 @@ class Instrument(object):
 
     def set_next_tonic_from_sp(self, scale_position, flatten_by=0):
         spd = scale_position_data[scale_position]
-        self.set_next("tonic", (self._tonic + spd.root_pitch - flatten_by) % 12)
+        self.set_next("tonic", (self.tonic + spd.root_pitch - flatten_by) % 12)
 
     def commit(self, key):
 
@@ -153,6 +324,30 @@ class Instrument(object):
             next_value = getattr(self, key)
 
         setattr(self, key, next_value)
+
+    def inc(self, key, by):
+        v = getattr(self, key)
+        self._prev[key] = v
+        setattr(self, key, v + by)
+        
+    def dec(self, key, by):
+        self.inc(key, -by)
+        
+    def undo_inc(self, key, by):
+        self.undo_set(key, value)
+    
+    def undo_dec(self, key, by):
+        self.undo_set(key, by)
+
+    def set(self, key, value):
+        self._prev[key] = getattr(self, key)
+        setattr(self, key, value)
+
+    def undo_set(self, key, value):
+        setattr(self, key, self._prev[key])
+
+    def undo(self, method_key, *args):
+        getattr(self, "undo_" + method_key)(*args)
 
     def construct_chord(self, scale_position, **modifiers):
         spd = scale_position_data[scale_position]
@@ -317,8 +512,10 @@ class InputHandler(object):
     def update(self, events):
         # modifier_inputs = self.read_modifier_inputs()
 
-        for event in events:
+        to_do = []
+        to_undo = []
 
+        for event in events:
             try:
                 joy_index = getattr(event, "joy")
             # this event does not spark joy
@@ -332,12 +529,11 @@ class InputHandler(object):
             if joy_index != self._joystick_index:
                 if self._joystick_index < 0 and event.type == JOYBUTTONDOWN:
                     self._joystick_index = joy_index
-                continue
+                else:
+                    continue
 
             # joystick = self._joysticks[self._joystick_index]
             keymap = self.mappings[self.mode]
-            to_do = []
-            to_undo = []
 
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
                 for data in keymap.get("buttons", {}).get(event.button, []):
@@ -377,9 +573,4 @@ class InputHandler(object):
                     if processed_value != None:
                         to_do.append(shlex.split(data["do"]) + [processed_value])
 
-            for td in to_do:
-                getattr(self._instrument, td[0])(*td[1:])
-            for tu in to_undo:
-                self._instrument.undo(*td)
-            
-            return {"to_do": to_do, "to_undo": to_undo}
+        return {"to_do": to_do, "to_undo": to_undo}
