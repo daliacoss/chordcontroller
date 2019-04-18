@@ -21,11 +21,11 @@ class ButtonEvent(Event):
 def mapping():
     return {
         "hats": {
-            "0_0_1": [{"do": "set octave 4"}],
-            "0_0_-1": [{"do": "set octave 5"}],
+            "0_0_1": [{"do": ["set", "octave", 4]}],
+            "0_0_-1": [{"do": ["set", "octave", 5]}],
         },
         "buttons": {
-            "0": [{"do": "play_scale_position 1"}]
+            "0": [{"do": ["play_scale_position", 1]}]
         }
     }
 
@@ -97,6 +97,38 @@ class TestCommandsAndInvoker(object):
 
         assert cmd.group_by(True) == ("inc", obj, "button", 2)
     
+    def test_def_command(self):
+        from chordcontroller import def_command
+        
+        class MyClass(object):
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+            def myfoo(self, x, y):
+                self.x += x
+                self.y += y
+        
+        Foo = def_command("foo", "myfoo", ["x", "y"], range(1))
+        o = MyClass(3, 4)
+        cmd = Foo(o, 1, 2)
+        assert cmd.name == "foo"
+        assert cmd.x == 1
+        assert cmd.y == 2
+        assert cmd.group_by() == ("foo", 1)
+        assert cmd.group_by(True) == ("foo", o, 1)
+
+        assert o.x == 3
+        assert o.y == 4                
+        cmd.execute()
+        assert o.x == 4
+        assert o.y == 6
+        
+        FooBar = def_command("foo_bar", "myfoo", ["x", "y"])
+        o = MyClass(3, 4)
+        cmd = FooBar(o, 1, 2)
+        assert cmd.group_by() == ("foo_bar", 1, 2)
+        assert cmd.group_by(True) == ("foo_bar", o, 1, 2)
+    
     def test_invoker(self):
         from chordcontroller import SetAttribute, IncrementAttribute, Invoker
         
@@ -149,8 +181,9 @@ def test_commands_from_input_mapping(mapping):
     from chordcontroller import commands_from_input_mapping
     
     cmds = commands_from_input_mapping(mapping)
-    expected = (("set", "octave", "4"), ("set", "octave", "5"), ("play_scale_position", "1"))
+    expected = (("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1))
     for i, c in enumerate(cmds):
+        print(c)
         assert tuple(c) in expected
 
 class TestInstrument(object):
@@ -201,13 +234,20 @@ class TestInputHandler(object):
         response = input_handler.update([ButtonEvent(0)])
         assert not response["to_undo"]
 
-        expected_to_do = ["set", "quality", "1"]
+        expected_to_do = ["set", "quality", 1]
         for i, x in enumerate(expected_to_do):
             assert response["to_do"][0][i] == x
 
         response = input_handler.update([ButtonEvent(0, is_down=False)])
         assert not response["to_do"]
 
-        expected_to_do = ["set", "quality", "1"]
+        expected_to_do = ["set", "quality", 1]
         for i, x in enumerate(expected_to_do):
             assert response["to_undo"][0][i] == x
+
+class TestChordController(object):
+    
+    def test_init(self, input_handler, instrument):
+        from chordcontroller import ChordController
+        
+        ChordController(input_handler, instrument)

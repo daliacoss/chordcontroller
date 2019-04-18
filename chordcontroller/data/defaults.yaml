@@ -43,44 +43,45 @@ mappings:
     mode_default:
         hats:
             *HAT_DPAD_UP:
-                - do: play_scale_position 0
+                - do: [play_scale_position, 0]
                   behavior: momentary #default
             *HAT_DPAD_DOWN:
-                - do: play_scale_position 0
+                - do: [play_scale_position, 0]
             *HAT_DPAD_DOWNRIGHT:
-                - do: play_scale_position 1
+                - do: [play_scale_position, 1,]
             *HAT_DPAD_UPRIGHT:
-                - do: play_scale_position 2
+                - do: [play_scale_position, 2,]
             *HAT_DPAD_RIGHT:
-                - do: play_scale_position 3
+                - do: [play_scale_position, 3,]
             *HAT_DPAD_LEFT:
-                - do: play_scale_position 4
+                - do: [play_scale_position, 4,]
             *HAT_DPAD_DOWNLEFT:
-                - do: play_scale_position 5
+                - do: [play_scale_position, 5,]
             *HAT_DPAD_UPLEFT:
-                - do: play_scale_position 6
+                - do: [play_scale_position, 6,]
         buttons:
             *BUTTON_RB:
-                - do: set tonic_offset -1
+                - do: [set, tonic_offset, -1]
                   behavior: momentary #default
-            *BUTTON_LB:
-                - do: sustain
+            # *BUTTON_LB:
+                # - do: [send_cc, 64, 127] # sustain pedal
+                  # undo: [send_cc, 64, 0]
             *BUTTON_X:
-                - do: inc extension 1
+                - do: [inc, extension, 1]
             *BUTTON_Y:
-                - do: inc extension 1
+                - do: [inc, extension, 1]
             *BUTTON_A:
-                - do: set quality 1
+                - do: [set, quality, 1]
             *BUTTON_B:
-                - do: set quality 2
+                - do: [set, quality, 2]
         axes:
             *AXIS_RTRIGGER:
-                - do: set velocity
+                - do: [set, velocity,]
                   curve: 1.7
                   value_at_min: 127
                   value_at_max: 0
             *AXIS_LTRIGGER:
-                - do: set voicing
+                - do: [set, voicing,]
                   value_at_min: 0
                   value_at_max: 3
                   steps:
@@ -93,23 +94,23 @@ mappings:
         master_behavior: momentary
         hats:
             *HAT_DPAD_RIGHT:
-                - do: inc octave 1
+                - do: [inc, octave, 1]
                   behavior: latch
             *HAT_DPAD_LEFT:
-                - do: dec octave 1 
+                - do: [dec, octave, 1 ]
                   behavior: latch
     mode_change_harmony:
         master_button: *BUTTON_BACK
         master_behavior: momentary
         buttons:
             *BUTTON_A:
-                - do: set harmony 0 # single voice
+                - do: [set, harmony, 0] # single voice
                   behavior: latch
             *BUTTON_X:
-                - do: set harmony 1 # harmony a third above root
+                - do: [set, harmony, 1] # harmony a third above root
                   behavior: latch
             *BUTTON_Y:
-                - do: set harmony 2 # triad
+                - do: [set, harmony, 2] # triad
                   behavior: latch
     mode_change_bass:
         master_button: *BUTTON_LTHUMB

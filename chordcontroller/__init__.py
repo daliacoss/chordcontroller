@@ -1,4 +1,4 @@
-# ChordController
+super# ChordController
 # Copyright (C) 2019 Decky Coss
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 import math, os, shlex
 import pygame, rtmidi, rtmidi.midiutil
-from collections import namedtuple, deque
+from collections import namedtuple, deque, OrderedDict
 from pygame.locals import *
 
 MAJOR = 0
@@ -169,6 +169,78 @@ class IncrementAttribute(SetAttribute):
             rest = (self._obj, *rest)
         return (self.name, *rest)
 
+class DecrementAttribute(IncrementAttribute):
+    
+    name = "dec"
+    
+    def __init__(self, obj, key, value):
+        super().__init__(obj, key, -value)
+
+class PlayScalePosition(Command):
+
+    name = "play_scale_position"
+
+    def __init__(self, obj, position):
+        super().__init__(obj)
+        self._position = position
+    
+    def execute(self):
+        obj.play_scale_position(self._position)
+    
+    def group_by(self, include_obj=False):
+        if include_obj:
+            rest = (self._obj, self._position)
+        else:
+            rest = (self._position,)
+        return (self.name, *rest)
+        
+
+class SendCC(Command):
+
+    name = "send_cc"
+
+    def __init__(self, obj, byte1, byte2):
+        super().__init__(obj)
+        self._byte1 = byte1
+        self._byte2 = byte2
+
+    def execute(self):
+        obj.send_cc(self._byte1, self._byte2)
+
+def def_command(name, obj_method_name, obj_method_params, param_group_range=None):
+    class _Command(Command):
+
+        def __init__(self, obj, *arg):
+            super().__init__(obj)
+            
+            self._obj_method_name = obj_method_name
+            self._obj_method_arg = OrderedDict()
+            for i, k in enumerate(obj_method_params):
+                self._obj_method_arg[k] = arg[i]
+            self._param_group_range = param_group_range or range(i + 1)
+        
+        def execute(self):
+            getattr(self._obj, self._obj_method_name)(**self._obj_method_arg)
+            
+        def __getattr__(self, key):
+            return self._obj_method_arg[key]
+        
+        def group_by(self, include_obj=False):
+
+            all_values = tuple(self._obj_method_arg.values())
+            rest = []
+            for i in self._param_group_range:
+                rest.append(all_values[i])
+
+            if include_obj:
+                rest = (self._obj, *rest)
+
+            return (self.name, *rest)
+
+    _Command.name = name
+    
+    return _Command
+
 class Invoker(object):
 
     def __init__(self, obj, command_classes=None):
@@ -188,7 +260,7 @@ class Invoker(object):
         cmd_class = self._command_classes.get(cmd_name)
         if not cmd_class:
             raise KeyError(
-                "{} is not a registered command. Did you forget to call {}.add_command_class?".format(
+                "{} is not a registered command. Did you remember to call {}.add_command_class?".format(
                     cmd_name, self.__class__.__name__))
 
         return cmd_class
@@ -402,17 +474,28 @@ def commands_from_input_mapping(mapping):
     for x in ["hats", "buttons"]:
         for switch_name, switch_actions in mapping.get(x, {}).items():
             for action in switch_actions:
-                commands.append(action["do"].split())
+                commands.append(action["do"])
     
     return commands
 
 class ChordController(object):
-    def __init__(self, input_handler_config, extra_cmd_classes=tuple()):
-        self.input_handler = InputHandler(input_handler_config)
-        self.instrument = Instrument()
-        self.invoker = Invoker(self.instrument, (SetAttribute, IncrementAttribute, *extra_cmd_classes))
+    
+    _default_cmd_classes = (
+        SetAttribute, IncrementAttribute, DecrementAttribute, SendCC, PlayScalePosition
+    )
+    
+    def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
+
+        if issubclass(type(input_handler), InputHandler):
+            self.input_handler = input_handler
+        else:
+            self.input_handler = InputHandler(input_handler)
+
+        self.instrument = instrument or Instrument()
+        self.invoker = Invoker(self.instrument, (*self._default_cmd_classes, *extra_cmd_classes))
         for k_mode, mode in input_handler.mappings.items():
-            self.invoker.add_commands(commands_from_input_mapping(mode))
+            for command in commands_from_input_mapping(mode):
+                self.invoker.add_command(*command)
 
 class InputHandler(object):
 
@@ -556,9 +639,9 @@ class InputHandler(object):
                 for data in keymap.get("buttons", {}).get(event.button, []):
                     behavior = data.get("behavior", "momentary")
                     if event.type == JOYBUTTONDOWN and behavior in ["momentary", "latch"]:
-                        to_do.append(shlex.split(data["do"]))
+                        to_do.append(data["do"])
                     elif event.type == JOYBUTTONUP and behavior == "momentary":
-                        to_undo.append(shlex.split(data["do"]))
+                        to_undo.append(data["do"])
 
             elif event.type == JOYHATMOTION:
                 most_recent_hat_vector = self._most_recent_hat_vector.get(event.hat)
