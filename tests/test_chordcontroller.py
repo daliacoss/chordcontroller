@@ -33,7 +33,7 @@ def mapping():
 def instrument():
     import chordcontroller
     return chordcontroller.Instrument(octave=5)
-    
+
 @pytest.fixture
 def input_handler():
     from chordcontroller import InputHandler
@@ -48,6 +48,19 @@ def input_handler():
 def chord_root_position(request):
     import chordcontroller
     return chordcontroller.Chord(*request.param)
+
+@pytest.fixture(params=[
+    #((BUTTON_ID, IS_DOWN, EXPECTED_VALUE),)
+
+    # press A, then release A, then release A
+    ((0, True, 1), (0, False, 0), (0, False, 0)),
+    # press A, then press B, then release B, then release A
+    ((0, True, 1), (1, True, 2), (1, False, 1), (0, False, 0)),
+    # press A, then press B, then release A then release B
+    ((0, True, 1), (1, True, 2), (0, False, 2), (1, False, 0)),
+])
+def button_sequence(request):
+    return [{"button_event": ButtonEvent(p[0], is_down=p[1]), "expected": p[2]} for p in request.param]
 
 #########
 # TESTS #
@@ -73,7 +86,7 @@ class TestCommandsAndInvoker(object):
 
     def test_set_attribute(self):
         from chordcontroller import SetAttribute
-        
+
         obj = ButtonEvent(0)
         cmd = SetAttribute(obj, "button", 3)
         assert obj.button == 0
@@ -82,7 +95,7 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 3
 
         assert cmd.group_by(True) == ("set", obj, "button")
-        
+
         assert not cmd.revert
 
     def test_inc_attribute(self):
@@ -96,10 +109,10 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 3
 
         assert cmd.group_by(True) == ("inc", obj, "button", 2)
-    
+
     def test_def_command(self):
         from chordcontroller import def_command
-        
+
         class MyClass(object):
             def __init__(self, x, y):
                 self.x = x
@@ -107,7 +120,7 @@ class TestCommandsAndInvoker(object):
             def myfoo(self, x, y):
                 self.x += x
                 self.y += y
-        
+
         Foo = def_command("foo", "myfoo", ["x", "y"], range(1))
         o = MyClass(3, 4)
         cmd = Foo(o, 1, 2)
@@ -118,23 +131,23 @@ class TestCommandsAndInvoker(object):
         assert cmd.group_by(True) == ("foo", o, 1)
 
         assert o.x == 3
-        assert o.y == 4                
+        assert o.y == 4
         cmd.execute()
         assert o.x == 4
         assert o.y == 6
-        
+
         FooBar = def_command("foo_bar", "myfoo", ["x", "y"])
         o = MyClass(3, 4)
         cmd = FooBar(o, 1, 2)
         assert cmd.group_by() == ("foo_bar", 1, 2)
         assert cmd.group_by(True) == ("foo_bar", o, 1, 2)
-    
+
     def test_invoker(self):
         from chordcontroller import SetAttribute, IncrementAttribute, Invoker
-        
+
         obj = ButtonEvent(-1)
         invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
-        
+
         cmd_set_button_0 = invoker.add_command("set", "button", 0)
         cmd_set_button_1 = invoker.add_command("set", "button", 1)
         cmd_set_button_2 = invoker.add_command("set", "button", 2)
@@ -151,7 +164,7 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_1, cmd_set_button_0)
-        
+
         # undoing a command below the top of the undo stack should remove
         # it from the stack, but should have no effect on the button value
         # if there is no revert method
@@ -165,7 +178,7 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_0)
-        
+
         # undoing the most recent command should change the button value
         assert invoker.undo("set", "button", 2) is cmd_set_button_2
         assert obj.button == 0
@@ -179,7 +192,7 @@ class TestCommandsAndInvoker(object):
 
 def test_commands_from_input_mapping(mapping):
     from chordcontroller import commands_from_input_mapping
-    
+
     cmds = commands_from_input_mapping(mapping)
     expected = (("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1))
     for i, c in enumerate(cmds):
@@ -246,8 +259,45 @@ class TestInputHandler(object):
             assert response["to_undo"][0][i] == x
 
 class TestChordController(object):
-    
+
     def test_init(self, input_handler, instrument):
         from chordcontroller import ChordController
-        
+
         ChordController(input_handler, instrument)
+
+    def test_update(self, input_handler, instrument, button_sequence):
+        from chordcontroller import ChordController
+
+        chord_controller = ChordController(input_handler, instrument)
+
+        for d in button_sequence:
+            chord_controller.update([d["button_event"]])
+            assert chord_controller.instrument.quality == d["expected"]
+
+        # press A, then release A
+        chord_controller.update([ButtonEvent(0)])
+        assert chord_controller.instrument.quality == 1
+        chord_controller.update([ButtonEvent(0, is_down=False)])
+        assert chord_controller.instrument.quality == 0
+
+        # ...then release A (should have no effect if command has no revert)
+        chord_controller.update([ButtonEvent(0, is_down=False)])
+        assert chord_controller.instrument.quality == 0
+
+        # press A, then press B, then release B, then release A
+        chord_controller.update([ButtonEvent(0)])
+        chord_controller.update([ButtonEvent(1)])
+        assert chord_controller.instrument.quality == 2
+        chord_controller.update([ButtonEvent(1, is_down=False)])
+        assert chord_controller.instrument.quality == 1
+        chord_controller.update([ButtonEvent(0, is_down=False)])
+        assert chord_controller.instrument.quality == 0
+
+        # press A, then press B, then release A then release B
+        chord_controller.update([ButtonEvent(0)])
+        chord_controller.update([ButtonEvent(1)])
+        assert chord_controller.instrument.quality == 2
+        chord_controller.update([ButtonEvent(0, is_down=False)])
+        assert chord_controller.instrument.quality == 2
+        chord_controller.update([ButtonEvent(1, is_down=False)])
+        assert chord_controller.instrument.quality == 0

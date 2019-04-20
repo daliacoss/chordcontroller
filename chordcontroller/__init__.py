@@ -110,20 +110,57 @@ class Command(object):
         Execute the command.
         """
         raise NotImplementedError
-    
+
     def group_by(self, include_obj=False):
         """
         Return this command object's group_by attribute. This can be used by
         an invoker to determine which undo stack to place the object in.
         """
- 
+
         raise NotImplementedError
-    
+
     # def name(self):
         # return self.__class__.__name__
 
     name = "command"
     revert = False
+
+def def_command(name, obj_method_name, obj_method_params, param_group_range=None):
+    class _Command(Command):
+
+        def __init__(self, obj, *arg):
+            super().__init__(obj)
+
+            self._obj_method_name = obj_method_name
+            self._obj_method_arg = OrderedDict()
+            for i, k in enumerate(obj_method_params):
+                self._obj_method_arg[k] = arg[i]
+            self._param_group_range = param_group_range or range(i + 1)
+
+        def execute(self):
+            getattr(self._obj, self._obj_method_name)(**self._obj_method_arg)
+
+        def __getattr__(self, key):
+            return self._obj_method_arg[key]
+
+        def __repr__(self):
+            return (self._obj_method_arg.values())
+
+        def group_by(self, include_obj=False):
+
+            all_values = tuple(self._obj_method_arg.values())
+            rest = []
+            for i in self._param_group_range:
+                rest.append(all_values[i])
+
+            if include_obj:
+                rest = (self._obj, *rest)
+
+            return (self.name, *rest)
+
+    _Command.name = name
+
+    return _Command
 
 class SetAttribute(Command):
 
@@ -133,7 +170,7 @@ class SetAttribute(Command):
         super().__init__(obj)
         self._key = key
         self._value = value
-    
+
     def group_by(self, include_obj=False):
         if include_obj:
             rest = (self._obj, self._key)
@@ -141,14 +178,17 @@ class SetAttribute(Command):
             rest = (self._key,)
         return (self.name, *rest)
 
+    def __repr__(self):
+        return str((self.name, self._obj, self.key, self.value))
+
     @property
     def key(self):
         return self._key
-    
+
     @property
     def value(self):
         return self._value
-        
+
     def execute(self):
         setattr(self._obj, self._key, self._value)
 
@@ -170,9 +210,9 @@ class IncrementAttribute(SetAttribute):
         return (self.name, *rest)
 
 class DecrementAttribute(IncrementAttribute):
-    
+
     name = "dec"
-    
+
     def __init__(self, obj, key, value):
         super().__init__(obj, key, -value)
 
@@ -183,63 +223,18 @@ class PlayScalePosition(Command):
     def __init__(self, obj, position):
         super().__init__(obj)
         self._position = position
-    
+
     def execute(self):
         obj.play_scale_position(self._position)
-    
+
     def group_by(self, include_obj=False):
         if include_obj:
             rest = (self._obj, self._position)
         else:
             rest = (self._position,)
         return (self.name, *rest)
-        
 
-class SendCC(Command):
-
-    name = "send_cc"
-
-    def __init__(self, obj, byte1, byte2):
-        super().__init__(obj)
-        self._byte1 = byte1
-        self._byte2 = byte2
-
-    def execute(self):
-        obj.send_cc(self._byte1, self._byte2)
-
-def def_command(name, obj_method_name, obj_method_params, param_group_range=None):
-    class _Command(Command):
-
-        def __init__(self, obj, *arg):
-            super().__init__(obj)
-            
-            self._obj_method_name = obj_method_name
-            self._obj_method_arg = OrderedDict()
-            for i, k in enumerate(obj_method_params):
-                self._obj_method_arg[k] = arg[i]
-            self._param_group_range = param_group_range or range(i + 1)
-        
-        def execute(self):
-            getattr(self._obj, self._obj_method_name)(**self._obj_method_arg)
-            
-        def __getattr__(self, key):
-            return self._obj_method_arg[key]
-        
-        def group_by(self, include_obj=False):
-
-            all_values = tuple(self._obj_method_arg.values())
-            rest = []
-            for i in self._param_group_range:
-                rest.append(all_values[i])
-
-            if include_obj:
-                rest = (self._obj, *rest)
-
-            return (self.name, *rest)
-
-    _Command.name = name
-    
-    return _Command
+SendCC = def_command("send_cc", "send_cc", ["byte1", "byte2"])
 
 class Invoker(object):
 
@@ -251,10 +246,10 @@ class Invoker(object):
         self._command_classes = {}
         for cmd_class in command_classes or []:
             self.add_command_class(cmd_class)
-    
+
     def add_command_class(self, cmd_class):
         self._command_classes[cmd_class.name] = cmd_class
-    
+
     def get_command_class(self, cmd_name):
 
         cmd_class = self._command_classes.get(cmd_name)
@@ -264,52 +259,50 @@ class Invoker(object):
                     cmd_name, self.__class__.__name__))
 
         return cmd_class
-    
+
+    @property
+    def commands(self):
+        return self._commands.items()
+
+    @property
+    def command_stacks(self):
+        return self._command_stacks.items()
+
     def add_command(self, cmd_name, *cmd_arg):
 
-        cmd_data = self.command_data(cmd_name, *cmd_arg)
-        command = cmd_data["class"](self._obj, *cmd_arg)
-        self._commands[cmd_data["id"]] = command
+        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
+        command = self._commands.get((cmd_name, *cmd_arg))
+        if command:
+            return command
+
+        cmd_class = self.get_command_class(cmd_name)
+        command = cmd_class(self._obj, *cmd_arg)
+        self._commands[(cmd_name, *cmd_arg)] = command
         self._command_stacks.setdefault(command.group_by(), tuple())
 
         return command
-    
-    def remove_command(self, cmd_name, *cmd_arg):
-        cmd_data = self.command_data(cmd_name, *cmd_arg)
-        self._commands.pop(cmd_data["id"])
-        # TODO: remove from stack
-    
-    def command_data(self, cmd_name, *cmd_arg):
-        d = {
-            "class": self.get_command_class(cmd_name),
-            "id": (cmd_name, *cmd_arg)
-        }
 
-        if cmd_arg and not d["class"].revert:
-            # d["stack_id"] = d["id"][:-1]
-            d["has_revert"] = False
-        else:
-            # d["stack_id"] = d["id"]
-            d["has_revert"] = True
-            
-        return d
-    
+    def remove_command(self, cmd_name, *cmd_arg):
+        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
+        self._commands.pop(cmd_name, *cmd_arg)
+        # TODO: remove from stack
+
     def get_command_stack(self, stack_id):
         return self._command_stacks[stack_id]
 
     def do(self, cmd_name, *cmd_arg):
-        cmd_data = self.command_data(cmd_name, *cmd_arg)
-        cmd = self._commands[cmd_data["id"]]
+        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
+        cmd = self._commands[(cmd_name, *cmd_arg)]
         cmd.execute()
-        
+
         stack_id = cmd.group_by()
         new_stack = (cmd,) + self._command_stacks[stack_id]
         self._command_stacks[stack_id] = new_stack
-    
+
     def undo(self, cmd_name, *cmd_arg):
 
-        cmd_data = self.command_data(cmd_name, *cmd_arg)
-        command = self._commands[cmd_data["id"]]
+        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
+        command = self._commands[(cmd_name, *cmd_arg)]
         stack_id = command.group_by()
         stack = self._command_stacks.get(stack_id)
 
@@ -322,7 +315,7 @@ class Invoker(object):
                 break
         else:
             return
-            
+
         # run the revert method if it exists. otherwise, if the command to undo
         # is at the top of the stack, run the previous command to restore the
         # previous state
@@ -356,6 +349,7 @@ class Instrument(object):
         self.bass = 0
         self.harmony = 0
         self.voicing = 0
+        self.quality = 0
 
     @property
     def octave(self):
@@ -379,7 +373,7 @@ class Instrument(object):
 
     @tonic.setter
     def tonic(self, t):
-        self._tonic = t
+        self._tonic = t % 12
 
     def set_next(self, key, value):
         self._next[key] = value
@@ -401,13 +395,13 @@ class Instrument(object):
         v = getattr(self, key)
         self._prev[key] = v
         setattr(self, key, v + by)
-        
+
     def dec(self, key, by):
         self.inc(key, -by)
-        
+
     def undo_inc(self, key, by):
         self.undo_set(key, value)
-    
+
     def undo_dec(self, key, by):
         self.undo_set(key, by)
 
@@ -475,15 +469,15 @@ def commands_from_input_mapping(mapping):
         for switch_name, switch_actions in mapping.get(x, {}).items():
             for action in switch_actions:
                 commands.append(action["do"])
-    
+
     return commands
 
 class ChordController(object):
-    
+
     _default_cmd_classes = (
         SetAttribute, IncrementAttribute, DecrementAttribute, SendCC, PlayScalePosition
     )
-    
+
     def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
 
         if issubclass(type(input_handler), InputHandler):
@@ -493,9 +487,32 @@ class ChordController(object):
 
         self.instrument = instrument or Instrument()
         self.invoker = Invoker(self.instrument, (*self._default_cmd_classes, *extra_cmd_classes))
+
+        # for "set" commands, we need a default value at the bottom of the undo
+        # stack. we will create a command based on the initial value of the
+        # attribute to set, then run that command immediately
+        is_fallback_needed = set()
         for k_mode, mode in input_handler.mappings.items():
-            for command in commands_from_input_mapping(mode):
-                self.invoker.add_command(*command)
+            for do in commands_from_input_mapping(mode):
+                cmd = self.invoker.add_command(*do)
+                if (
+                    issubclass(cmd.__class__, SetAttribute) and
+                    not cmd.revert and
+                    (cmd.group_by(), tuple()) in self.invoker.command_stacks
+                ):
+                    is_fallback_needed.add(cmd.group_by())
+        for x in is_fallback_needed:
+            fallback_arg = (x[0], x[1], (getattr(self.instrument, x[1], None)))
+            self.invoker.add_command(*fallback_arg)
+            self.invoker.do(*fallback_arg)
+
+
+    def update(self, events):
+        response = self.input_handler.update(events)
+        for action in response["to_do"]:
+            self.invoker.do(*action)
+        for action in response["to_undo"]:
+            self.invoker.undo(*action)
 
 class InputHandler(object):
 
@@ -520,7 +537,7 @@ class InputHandler(object):
         return self._joystick_index
 
     def are_adjacent(self, a, b):
-        
+
         """
         return True if vector directions are diagonally 'adjacent' to each other
         (e.g., (0,1) and (1,1))
@@ -536,11 +553,11 @@ class InputHandler(object):
 
     def is_cardinal(self, v):
         return 0 in v
-    # 
+    #
     # def read_modifier_inputs(self):
     #     joystick = self._joysticks[self._joystick_index]
     #     min_trigger, max_trigger = self.calibration["min_trigger"], self.calibration["max_trigger"]
-    # 
+    #
     #     items = tuple()
     #     for k, axis in self.mappings["axes"].items():
     #         if axis in self._uncalibrated_axes:
@@ -548,11 +565,11 @@ class InputHandler(object):
     #         else:
     #             value = (joystick.get_axis(axis) - min_trigger) / (max_trigger - min_trigger)
     #         items += ((k, value),)
-    # 
+    #
     #     items += tuple( (k, joystick.get_button(v)) for k, v in self.mappings["momentary"].items() )
-    # 
+    #
     #     return dict(items)
-    # 
+    #
     # def handle_voicing_slider(self, voicing_input):
     #     for i, r in enumerate(self.mappings["voicing_ranges"]):
     #         if voicing_input <= r:
@@ -660,14 +677,14 @@ class InputHandler(object):
                         to_do.append(shlex.split(data["do"]))
                     elif is_neutral and behavior == "momentary":
                         to_undo.append(shlex.split(data["do"]))
-                
+
                 self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL
 
             elif event.type == JOYAXISMOTION:
-            
+
                 if event.axis in self._uncalibrated_axes:
                     self._uncalibrated_axes.discard(event.axis)
-                
+
                 for data in keymap.get("axes", {}).get(event.axis):
                     processed_value = self.map_float_to_range(self.clamp_axis_value(event.value), **data)
                     if processed_value != None:

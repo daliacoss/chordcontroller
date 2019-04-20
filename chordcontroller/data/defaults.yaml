@@ -63,9 +63,9 @@ mappings:
             *BUTTON_RB:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary #default
-            # *BUTTON_LB:
-                # - do: [send_cc, 64, 127] # sustain pedal
-                  # undo: [send_cc, 64, 0]
+            *BUTTON_LB:
+                - do: [send_cc, 64, 127] # sustain pedal
+                  undo: [send_cc, 64, 0]
             *BUTTON_X:
                 - do: [inc, extension, 1]
             *BUTTON_Y:
