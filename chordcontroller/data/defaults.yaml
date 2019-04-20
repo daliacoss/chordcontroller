@@ -71,9 +71,9 @@ mappings:
             *BUTTON_Y:
                 - do: [inc, extension, 1]
             *BUTTON_A:
-                - do: [set, quality, 1]
+                - do: [set, quality_modifier, 1]
             *BUTTON_B:
-                - do: [set, quality, 2]
+                - do: [set, quality_modifier, 2]
         axes:
             *AXIS_RTRIGGER:
                 - do: [set, velocity,]

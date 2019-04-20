@@ -349,7 +349,7 @@ class Instrument(object):
         self.bass = 0
         self.harmony = 0
         self.voicing = 0
-        self.quality = 0
+        self.quality_modifier = 0
 
     @property
     def octave(self):
@@ -391,37 +391,15 @@ class Instrument(object):
 
         setattr(self, key, next_value)
 
-    def inc(self, key, by):
-        v = getattr(self, key)
-        self._prev[key] = v
-        setattr(self, key, v + by)
-
-    def dec(self, key, by):
-        self.inc(key, -by)
-
-    def undo_inc(self, key, by):
-        self.undo_set(key, value)
-
-    def undo_dec(self, key, by):
-        self.undo_set(key, by)
-
-    def set(self, key, value):
-        self._prev[key] = getattr(self, key)
-        setattr(self, key, value)
-
-    def undo_set(self, key, value):
-        setattr(self, key, self._prev[key])
-
-    def undo(self, method_key, *args):
-        getattr(self, "undo_" + method_key)(*args)
-
     def construct_chord(self, scale_position, **modifiers):
         spd = scale_position_data[scale_position]
         root = self.tonic + (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
 
-        if modifiers.get("do_alter_quality_1"):
+        # if modifiers.get("do_alter_quality_1"):
+        if self.quality_modifier == 1:
             quality = not spd.quality
-        elif modifiers.get("do_alter_quality_2"):
+        elif self.quality_modifier == 2:
+        # elif modifiers.get("do_alter_quality_2"):
             quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
         else:
             quality = spd.quality

@@ -208,12 +208,12 @@ class TestInstrument(object):
         (8.8, 8),
         ("3", 3),
     ])
-    def test_octave(self, instrument, input_value, expected_value):
+    def test_set_octave(self, instrument, input_value, expected_value):
         instrument.octave = input_value
         assert instrument.octave == expected_value
 
     @pytest.mark.parametrize("input_value", ["1.7","jeff"])
-    def test_octave_from_bad_string(self, instrument, input_value):
+    def test_set_octave_from_bad_string(self, instrument, input_value):
         with pytest.raises(ValueError):
             instrument.octave = input_value
 
@@ -223,21 +223,26 @@ class TestInstrument(object):
         (2.8, 2),
         ("2", 2),
     ])
-    def test_bass(self, instrument, input_value, expected_value):
+    def test_set_bass(self, instrument, input_value, expected_value):
         instrument.bass = input_value
         assert instrument.bass == expected_value
 
     @pytest.mark.parametrize("input_value", ["1.7","jeff"])
-    def test_bass_from_bad_string(self, instrument, input_value):
+    def test_set_bass_from_bad_string(self, instrument, input_value):
         with pytest.raises(ValueError):
             instrument.bass = input_value
 
-    @pytest.mark.parametrize("scale_position,modifiers,expected_value", [
-        (0, {}, (60, 64, 67)),
-        (0, {"do_flatten":1}, (60-1, 64-1, 67-1)),
+    @pytest.mark.parametrize("scale_position,quality_modifier,expected_value", [
+        (0, 0, (60, 64, 67)),
+        (0, 1, (60, 63, 67)),
+        (0, 2, (60, 63, 66)),
+        (1, 0, (62, 65, 69)),
+        (1, 1, (62, 66, 69)),
+        (1, 2, (62, 65, 68)),
     ])
-    def test_construct_chord(self, instrument, scale_position, modifiers, expected_value):
-        chord = instrument.construct_chord(scale_position, **modifiers)
+    def test_construct_chord(self, instrument, scale_position, quality_modifier, expected_value):
+        instrument.quality_modifier = quality_modifier
+        chord = instrument.construct_chord(scale_position)
         assert chord == expected_value
 
 class TestInputHandler(object):
@@ -247,14 +252,14 @@ class TestInputHandler(object):
         response = input_handler.update([ButtonEvent(0)])
         assert not response["to_undo"]
 
-        expected_to_do = ["set", "quality", 1]
+        expected_to_do = ["set", "quality_modifier", 1]
         for i, x in enumerate(expected_to_do):
             assert response["to_do"][0][i] == x
 
         response = input_handler.update([ButtonEvent(0, is_down=False)])
         assert not response["to_do"]
 
-        expected_to_do = ["set", "quality", 1]
+        expected_to_do = ["set", "quality_modifier", 1]
         for i, x in enumerate(expected_to_do):
             assert response["to_undo"][0][i] == x
 
@@ -272,32 +277,4 @@ class TestChordController(object):
 
         for d in button_sequence:
             chord_controller.update([d["button_event"]])
-            assert chord_controller.instrument.quality == d["expected"]
-
-        # press A, then release A
-        chord_controller.update([ButtonEvent(0)])
-        assert chord_controller.instrument.quality == 1
-        chord_controller.update([ButtonEvent(0, is_down=False)])
-        assert chord_controller.instrument.quality == 0
-
-        # ...then release A (should have no effect if command has no revert)
-        chord_controller.update([ButtonEvent(0, is_down=False)])
-        assert chord_controller.instrument.quality == 0
-
-        # press A, then press B, then release B, then release A
-        chord_controller.update([ButtonEvent(0)])
-        chord_controller.update([ButtonEvent(1)])
-        assert chord_controller.instrument.quality == 2
-        chord_controller.update([ButtonEvent(1, is_down=False)])
-        assert chord_controller.instrument.quality == 1
-        chord_controller.update([ButtonEvent(0, is_down=False)])
-        assert chord_controller.instrument.quality == 0
-
-        # press A, then press B, then release A then release B
-        chord_controller.update([ButtonEvent(0)])
-        chord_controller.update([ButtonEvent(1)])
-        assert chord_controller.instrument.quality == 2
-        chord_controller.update([ButtonEvent(0, is_down=False)])
-        assert chord_controller.instrument.quality == 2
-        chord_controller.update([ButtonEvent(1, is_down=False)])
-        assert chord_controller.instrument.quality == 0
+            assert chord_controller.instrument.quality_modifier == d["expected"]
