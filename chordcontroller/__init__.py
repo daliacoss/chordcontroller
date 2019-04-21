@@ -339,9 +339,10 @@ class Instrument(object):
         self._midi_device.open_virtual_port()
 
         self._most_recent_chord = tuple()
+        self._playing_notes = set()
         # self._prev = {}
         # _prev = []
-        # self._next = {}
+        self._next = {}
 
         self.octave = octave
         self.tonic = 0
@@ -350,6 +351,8 @@ class Instrument(object):
         self.harmony = 0
         self.voicing = 0
         self.quality_modifier = 0
+        self.extension_modifier = 0
+        self.velocity = 127
 
     @property
     def octave(self):
@@ -374,40 +377,47 @@ class Instrument(object):
     @tonic.setter
     def tonic(self, t):
         self._tonic = t % 12
+    
+    @property
+    def playing_notes(self):
+        return frozenset(self._playing_note)
 
     def set_next(self, key, value):
         self._next[key] = value
 
-    def set_next_tonic_from_sp(self, scale_position, flatten_by=0):
+    def set_next_tonic_from_scale_position(self, scale_position):
         spd = scale_position_data[scale_position]
-        self.set_next("tonic", (self.tonic + spd.root_pitch - flatten_by) % 12)
+        tonic_offset = self.tonic_offset
+        self.set_next("tonic", (self.tonic + spd.root_pitch + self.tonic_offset))
 
     def commit(self, key):
 
         try:
             next_value = self._next[key]
+            self._next.pop(key)
         except KeyError:
-            next_value = getattr(self, key)
+            return
 
         setattr(self, key, next_value)
 
     def construct_chord(self, scale_position, **modifiers):
         spd = scale_position_data[scale_position]
-        root = self.tonic + (self.octave * 12) + spd.root_pitch - modifiers.get("do_flatten", 0)
+        tonic_offset = self.tonic_offset
+        quality_modifier = self.quality_modifier
+        extension_modifier = self.extension_modifier
 
-        # if modifiers.get("do_alter_quality_1"):
+        root = self.tonic + (self.octave * 12) + spd.root_pitch - tonic_offset
+
         if self.quality_modifier == 1:
             quality = not spd.quality
         elif self.quality_modifier == 2:
-        # elif modifiers.get("do_alter_quality_2"):
             quality = DIMINISHED if spd.quality != DIMINISHED else MINOR
         else:
             quality = spd.quality
 
-        e = modifiers.get("do_extension_1", 0) + modifiers.get("do_extension_2", 0)
-        if e == 1:
+        if extension_modifier == 1:
             extensions = (MINOR_SEVENTH,)
-        elif e == 2:
+        elif extension_modifier == 2:
             if quality == DIMINISHED:
                 extensions = (DIMINISHED_SEVENTH,)
             else:
@@ -423,20 +433,55 @@ class Instrument(object):
 
         return chord
 
-    def play_chord(self, scale_position, **modifiers):
+    def play(self, do_release=True):
+        """
+        Play the current note cluster/chord.
+        
+        Keyword arguments:
+        do_release -- release (silence) any currently playing notes first.
+        """
 
-        self.release_chord()
+        if do_release:
+            self.release()
+        self.send_note_on(self._chord)
 
-        chord = self.construct_chord(scale_position, **modifiers)
-        velocity = 0x70 - round(modifiers.get("velocity", 0)**1.7 * 0x70)
+    def release(self):
+        """Release (silence) any currently playing notes."""
 
-        for voice in chord:
+        self.send_note_on(self._playing_notes, velocity=0)
+
+    def play_scale_position(self, scale_position):
+
+        self.set_chord_from_scale_position(scale_position)
+        self.play()
+
+    def set_chord_from_scale_position(self, scale_position):
+        """Set current note cluster/chord to result of construct_chord."""
+
+        self._chord = self.construct_chord(scale_position)
+
+    def send_note_on(note_values, velocity=None):
+        """
+        Send a MIDI note-on message for each specified note.
+        
+        Keyword arguments:
+        note_values -- iterable of note (pitch) values.
+        velocity -- if None, will default to self.velocity.
+        """
+        if not note_values:
+            return
+
+        if velocity is None:
+            velocity = self.velocity
+
+        for voice in note_values:
+            # velocity = 0x70 - round(modifiers.get("velocity", 0)**1.7 * 0x70)
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
-        self._most_recent_chord = chord
-
-    def release_chord(self):
-        for voice in self._most_recent_chord:
-            self._midi_device.send_message(NoteOn(voice, velocity=0))
+        
+        if velocity:
+            self._playing_notes.update(note_values)
+        else:
+            self._playing_notes.discard(note_values)
 
     def send_mod_wheel(self, mod_wheel):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))

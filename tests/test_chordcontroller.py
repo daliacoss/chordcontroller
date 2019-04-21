@@ -50,17 +50,27 @@ def chord_root_position(request):
     return chordcontroller.Chord(*request.param)
 
 @pytest.fixture(params=[
-    #((BUTTON_ID, IS_DOWN, EXPECTED_VALUE),)
-
     # press A, then release A, then release A
-    ((0, True, 1), (0, False, 0), (0, False, 0)),
+    ("quality_modifier", (0, True, 1), (0, False, 0), (0, False, 0)),
     # press A, then press B, then release B, then release A
-    ((0, True, 1), (1, True, 2), (1, False, 1), (0, False, 0)),
+    ("quality_modifier", (0, True, 1), (1, True, 2), (1, False, 1), (0, False, 0)),
     # press A, then press B, then release A then release B
-    ((0, True, 1), (1, True, 2), (0, False, 2), (1, False, 0)),
+    ("quality_modifier", (0, True, 1), (1, True, 2), (0, False, 2), (1, False, 0)),
+    
+    # press X, then release X
+    (("extension_modifier"), (2, True, 1), (2, False, 0)),
+    # press Y, then release Y
+    (("extension_modifier"), (3, True, 1), (3, False, 0)),
+    # press X, then press Y, then release Y, then release X
+    (("extension_modifier"), (2, True, 1), (3, True, 2), (3, False, 1), (2, False, 0)),
 ])
 def button_sequence(request):
-    return [{"button_event": ButtonEvent(p[0], is_down=p[1]), "expected": p[2]} for p in request.param]
+    expected_attr = request.param[0]
+    return [{
+        "button_event": ButtonEvent(p[0], is_down=p[1]),
+        "expected_value": p[2],
+        "expected_attr": expected_attr,
+    } for p in request.param[1:]]
 
 #########
 # TESTS #
@@ -277,4 +287,4 @@ class TestChordController(object):
 
         for d in button_sequence:
             chord_controller.update([d["button_event"]])
-            assert chord_controller.instrument.quality_modifier == d["expected"]
+            assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
