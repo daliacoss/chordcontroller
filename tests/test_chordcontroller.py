@@ -17,6 +17,10 @@ class ButtonEvent(Event):
     def __init__(self, button, is_down=True, joy=0):
         super().__init__(type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
 
+class HatEvent(Event):
+    def __init__(self, value, hat=0, joy=0):
+        super().__init__(value=value, type=JOYHATMOTION, hat=hat, joy=joy)
+
 @pytest.fixture
 def mapping():
     return {
@@ -261,17 +265,28 @@ class TestInputHandler(object):
 
         response = input_handler.update([ButtonEvent(0)])
         assert not response["to_undo"]
-
-        expected_to_do = ["set", "quality_modifier", 1]
-        for i, x in enumerate(expected_to_do):
-            assert response["to_do"][0][i] == x
+        assert response["to_do"] == [["set", "quality_modifier", 1]]
 
         response = input_handler.update([ButtonEvent(0, is_down=False)])
         assert not response["to_do"]
+        assert response["to_undo"] == [["set", "quality_modifier", 1]]
+    
+    def test_hat_motion(self, input_handler):
+        from chordcontroller import Vector
+        input_handler.joystick_index = 0
 
-        expected_to_do = ["set", "quality_modifier", 1]
-        for i, x in enumerate(expected_to_do):
-            assert response["to_undo"][0][i] == x
+        response = input_handler.update([HatEvent(Vector.UP)])
+        assert response["to_do"] == [["play_scale_position", 0]]
+        assert not response["to_undo"]
+        
+        response = input_handler.update([HatEvent(Vector.LEFT)])
+        assert response["to_do"] == [["play_scale_position", 4]]
+        assert response["to_undo"] == [["play_scale_position", 0]]
+        
+        response = input_handler.update([HatEvent(Vector.NEUTRAL)])
+        assert not response["to_do"]
+        assert response["to_undo"] == [["play_scale_position", 4]]
+
 
 class TestChordController(object):
 

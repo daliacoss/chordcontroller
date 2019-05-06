@@ -10,15 +10,15 @@ constants: # defines the "anchors" that are used later on in this yaml file
     - &BUTTON_XBOX 8
     - &BUTTON_LTHUMB 9
     - &BUTTON_RTHUMB 10
-    - &HAT_DPAD_NEUTRAL 0_0_0
-    - &HAT_DPAD_UP 0_0_1
-    - &HAT_DPAD_DOWN 0_0_-1
-    - &HAT_DPAD_DOWNRIGHT 0_1_-1
-    - &HAT_DPAD_UPRIGHT 0_1_1
-    - &HAT_DPAD_RIGHT 0_1_0
-    - &HAT_DPAD_LEFT 0_-1_0
-    - &HAT_DPAD_DOWNLEFT 0_-1_-1
-    - &HAT_DPAD_UPLEFT 0_-1_1
+    - &HAT_DPAD_NEUTRAL 0:0:0
+    - &HAT_DPAD_UP 0:0:1
+    - &HAT_DPAD_DOWN 0:0:-1
+    - &HAT_DPAD_DOWNRIGHT 0:1:-1
+    - &HAT_DPAD_UPRIGHT 0:1:1
+    - &HAT_DPAD_RIGHT 0:1:0
+    - &HAT_DPAD_LEFT 0:-1:0
+    - &HAT_DPAD_DOWNLEFT 0:-1:-1
+    - &HAT_DPAD_UPLEFT 0:-1:1
     - &AXIS_LTHUMBX 0
     - &AXIS_LTHUMBY 1
     - &AXIS_RTHUMBX 2

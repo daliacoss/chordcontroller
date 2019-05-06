@@ -233,6 +233,9 @@ class PlayScalePosition(Command):
         else:
             rest = (self._position,)
         return (self.name, *rest)
+    
+    def revert(self):
+        self._obj.release()
 
 SendCC = def_command("send_cc", "send_cc", ["byte1", "byte2"])
 
@@ -532,10 +535,13 @@ class ChordController(object):
 
     def update(self, events):
         response = self.input_handler.update(events)
+        p = [*filter(lambda x: x[0] == "play_scale_position", response["to_do"])]
+        r = [*filter(lambda x: x[0] == "play_scale_position", response["to_undo"])]
         for action in response["to_do"]:
             self.invoker.do(*action)
         for action in response["to_undo"]:
-            self.invoker.undo(*action)
+            if not (p and r and (action in r)):
+                self.invoker.undo(*action)
 
 class InputHandler(object):
 
@@ -558,6 +564,10 @@ class InputHandler(object):
     @property
     def joystick_index(self):
         return self._joystick_index
+
+    @joystick_index.setter
+    def joystick_index(self, v):
+        self._joystick_index = v
 
     def are_adjacent(self, a, b):
 
@@ -649,6 +659,9 @@ class InputHandler(object):
         calibration = self.axis_calibration[axis_id]
         return (raw_axis_value - calibration.min) / (calibration.max - calibration.min)
 
+    def _get_hat_actions(self, keymap, hat, value):
+        return keymap.get("hats", {}).get("{0}:{1}:{2}".format(hat, value.x, value.y), [])
+
     def update(self, events):
         # modifier_inputs = self.read_modifier_inputs()
 
@@ -674,7 +687,6 @@ class InputHandler(object):
 
             # joystick = self._joysticks[self._joystick_index]
             keymap = self.mappings[self.mode]
-
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
                 for data in keymap.get("buttons", {}).get(event.button, []):
                     behavior = data.get("behavior", "momentary")
@@ -684,24 +696,31 @@ class InputHandler(object):
                         to_undo.append(data["do"])
 
             elif event.type == JOYHATMOTION:
-                most_recent_hat_vector = self._most_recent_hat_vector.get(event.hat)
-                is_neutral = (event.value == Vector.NEUTRAL)
-                if is_neutral:
-                    if not most_recent_hat_vector:
-                        self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL
-                        continue
-                    key_vector = most_recent_hat_vector
-                else:
-                    key_vector = Vector(event.value)
+                
+                prev_value = self._most_recent_hat_vector.get(event.hat)
+                value = Vector(*event.value)
+                is_neutral = (value == Vector.NEUTRAL)
+                # if is_neutral:
+                #     if not most_recent_hat_vector:
+                #         self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL
+                #         continue
+                #     key_vector = most_recent_hat_vector
+                # else:
+                #     key_vector = value
 
-                for data in keymap.get("hats", {}).get("{0}_{1}_{2}".format(event.hat, key_vector.x, key_vector.y), []):
-                    behavior = data.get("behavior", "momentary")
-                    if not is_neutral and behavior in ["momentary", "latch"]:
-                        to_do.append(shlex.split(data["do"]))
-                    elif is_neutral and behavior == "momentary":
-                        to_undo.append(shlex.split(data["do"]))
+                if not is_neutral:
+                    for data in self._get_hat_actions(keymap, event.hat, value):
+                        behavior = data.get("behavior", "momentary")
+                        if behavior in ["momentary", "latch"]:
+                            to_do.append(data["do"])
 
-                self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL
+                if prev_value:
+                    for data in self._get_hat_actions(keymap, event.hat, prev_value):
+                        behavior = data.get("behavior", "momentary")
+                        if behavior in ["momentary", "latch"]:
+                            to_undo.append(data["do"])
+
+                self._most_recent_hat_vector[event.hat] = value
 
             elif event.type == JOYAXISMOTION:
 
@@ -711,6 +730,6 @@ class InputHandler(object):
                 for data in keymap.get("axes", {}).get(event.axis):
                     processed_value = self.map_float_to_range(self.clamp_axis_value(event.value), **data)
                     if processed_value != None:
-                        to_do.append(shlex.split(data["do"]) + [processed_value])
+                        to_do.append(data["do"] + [processed_value])
 
         return {"to_do": to_do, "to_undo": to_undo}
