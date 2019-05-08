@@ -25,11 +25,12 @@ class HatEvent(Event):
 def mapping():
     return {
         "hats": {
-            "0_0_1": [{"do": ["set", "octave", 4]}],
-            "0_0_-1": [{"do": ["set", "octave", 5]}],
+            "0:0:1": [{"do": ["set", "octave", 4]}],
+            "0:0:-1": [{"do": ["set", "octave", 5]}],
         },
         "buttons": {
-            "0": [{"do": ["play_scale_position", 1]}]
+            "0": [{"do": ["play_scale_position", 0]}],
+            "1": [{"do": ["play_scale_position", 1]}],
         }
     }
 
@@ -162,19 +163,19 @@ class TestCommandsAndInvoker(object):
         obj = ButtonEvent(-1)
         invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
 
-        cmd_set_button_0 = invoker.add_command("set", "button", 0)
-        cmd_set_button_1 = invoker.add_command("set", "button", 1)
-        cmd_set_button_2 = invoker.add_command("set", "button", 2)
-        cmd_set_button_1000 = invoker.add_command("set", "button", 1000)
+        cmd_set_button_0 = invoker.add_command(("set", "button", 0))
+        cmd_set_button_1 = invoker.add_command(("set", "button", 1))
+        cmd_set_button_2 = invoker.add_command(("set", "button", 2))
+        cmd_set_button_1000 = invoker.add_command(("set", "button", 1000))
         assert obj.button == -1
 
-        invoker.do("set", "button", 0)
+        invoker.do(("set", "button", 0))
         assert obj.button == 0
 
-        invoker.do("set", "button", 1)
+        invoker.do(("set", "button", 1))
         assert obj.button == 1
 
-        invoker.do("set", "button", 2)
+        invoker.do(("set", "button", 2))
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_1, cmd_set_button_0)
@@ -182,36 +183,38 @@ class TestCommandsAndInvoker(object):
         # undoing a command below the top of the undo stack should remove
         # it from the stack, but should have no effect on the button value
         # if there is no revert method
-        assert invoker.undo("set", "button", 1) is cmd_set_button_1
+        assert invoker.undo(("set", "button", 1)) is cmd_set_button_1
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_0)
 
         # undoing a command that was never executed should have no effect
-        assert not invoker.undo("set", "button", 1000)
+        assert not invoker.undo(("set", "button", 1000))
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_0)
 
         # undoing the most recent command should change the button value
-        assert invoker.undo("set", "button", 2) is cmd_set_button_2
+        assert invoker.undo(("set", "button", 2)) is cmd_set_button_2
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
         # undoing the only command in the stack should have no effect if
         # the command has no revert method
-        assert not invoker.undo("set", "button", 0)
+        assert not invoker.undo(("set", "button", 0))
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
 def test_commands_from_input_mapping(mapping):
     from chordcontroller import commands_from_input_mapping
 
-    cmds = commands_from_input_mapping(mapping)
-    expected = (("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1))
-    for i, c in enumerate(cmds):
-        print(c)
-        assert tuple(c) in expected
+    cmds = set((tuple(c) for c in commands_from_input_mapping(mapping)))
+    #cmds = commands_from_input_mapping(mapping)
+    expected = set((("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1), ("play_scale_position", 0)))
+    assert cmds == expected
+    #for i, c in enumerate(cmds)
+        #print(c)
+        #assert tuple(c) in expected
 
 class TestInstrument(object):
 

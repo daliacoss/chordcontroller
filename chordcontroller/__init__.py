@@ -1,4 +1,4 @@
-super# ChordController
+# ChordController
 # Copyright (C) 2019 Decky Coss
 #
 # This program is free software: you can redistribute it and/or modify
@@ -233,7 +233,7 @@ class PlayScalePosition(Command):
         else:
             rest = (self._position,)
         return (self.name, *rest)
-    
+
     def revert(self):
         self._obj.release()
 
@@ -243,7 +243,6 @@ class Invoker(object):
 
     def __init__(self, obj, command_classes=None):
         self._obj = obj
-        # self._command_classes = command_classes or {}
         self._commands = {}
         self._command_stacks = {}
         self._command_classes = {}
@@ -271,41 +270,44 @@ class Invoker(object):
     def command_stacks(self):
         return self._command_stacks.items()
 
-    def add_command(self, cmd_name, *cmd_arg):
+    #def add_command(self, cmd_name, *cmd_arg):
+    def add_command(self, cmd, stack_limit=0):
 
         # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
-        command = self._commands.get((cmd_name, *cmd_arg))
+        cmd = tuple(cmd)
+        command = self._commands.get(cmd)
         if command:
             return command
 
+        cmd_name = cmd[0]
+        cmd_arg = cmd[1:]
         cmd_class = self.get_command_class(cmd_name)
         command = cmd_class(self._obj, *cmd_arg)
-        self._commands[(cmd_name, *cmd_arg)] = command
+        self._commands[cmd] = command
         self._command_stacks.setdefault(command.group_by(), tuple())
 
         return command
 
-    def remove_command(self, cmd_name, *cmd_arg):
-        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
-        self._commands.pop(cmd_name, *cmd_arg)
+    def remove_command(self, cmd):
+        self._commands.pop(cmd)
         # TODO: remove from stack
 
     def get_command_stack(self, stack_id):
         return self._command_stacks[stack_id]
 
-    def do(self, cmd_name, *cmd_arg):
-        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
-        cmd = self._commands[(cmd_name, *cmd_arg)]
-        cmd.execute()
+    def do(self, cmd):
+        cmd = tuple(cmd)
+        command = self._commands[cmd]
+        command.execute()
 
-        stack_id = cmd.group_by()
-        new_stack = (cmd,) + self._command_stacks[stack_id]
+        stack_id = command.group_by()
+        new_stack = (command,) + self._command_stacks[stack_id]
         self._command_stacks[stack_id] = new_stack
 
-    def undo(self, cmd_name, *cmd_arg):
+    def undo(self, cmd):
 
-        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
-        command = self._commands[(cmd_name, *cmd_arg)]
+        cmd = tuple(cmd)
+        command = self._commands[cmd]
         stack_id = command.group_by()
         stack = self._command_stacks.get(stack_id)
 
@@ -317,6 +319,7 @@ class Invoker(object):
             if command is to_undo:
                 break
         else:
+            # nothing to undo
             return
 
         # run the revert method if it exists. otherwise, if the command to undo
@@ -520,7 +523,7 @@ class ChordController(object):
         is_fallback_needed = set()
         for k_mode, mode in input_handler.mappings.items():
             for do in commands_from_input_mapping(mode):
-                cmd = self.invoker.add_command(*do)
+                cmd = self.invoker.add_command(do)
                 if (
                     issubclass(cmd.__class__, SetAttribute) and
                     not cmd.revert and
@@ -529,8 +532,8 @@ class ChordController(object):
                     is_fallback_needed.add(cmd.group_by())
         for x in is_fallback_needed:
             fallback_arg = (x[0], x[1], (getattr(self.instrument, x[1], None)))
-            self.invoker.add_command(*fallback_arg)
-            self.invoker.do(*fallback_arg)
+            self.invoker.add_command(fallback_arg)
+            self.invoker.do(fallback_arg)
 
 
     def update(self, events):
@@ -538,10 +541,10 @@ class ChordController(object):
         p = [*filter(lambda x: x[0] == "play_scale_position", response["to_do"])]
         r = [*filter(lambda x: x[0] == "play_scale_position", response["to_undo"])]
         for action in response["to_do"]:
-            self.invoker.do(*action)
+            self.invoker.do(action)
         for action in response["to_undo"]:
             if not (p and r and (action in r)):
-                self.invoker.undo(*action)
+                self.invoker.undo(action)
 
 class InputHandler(object):
 
