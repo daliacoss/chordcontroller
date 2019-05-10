@@ -100,6 +100,9 @@ Vector.UPRIGHT = Vector(1,1)
 Vector.UPLEFT = Vector(-1,1)
 Vector.NEUTRAL = Vector(0,0)
 
+class UndoError(Exception):
+    pass
+
 class Command(object):
 
     def __init__(self, obj):
@@ -229,10 +232,9 @@ class PlayScalePosition(Command):
 
     def group_by(self, include_obj=False):
         if include_obj:
-            rest = (self._obj, self._position)
+            return (self.name, self._obj)
         else:
-            rest = (self._position,)
-        return (self.name, *rest)
+            return (self.name,)
 
     def revert(self):
         self._obj.release()
@@ -246,6 +248,7 @@ class Invoker(object):
         self._commands = {}
         self._command_stacks = {}
         self._command_classes = {}
+        self._command_stack_limits = {}
         for cmd_class in command_classes or []:
             self.add_command_class(cmd_class)
 
@@ -270,10 +273,8 @@ class Invoker(object):
     def command_stacks(self):
         return self._command_stacks.items()
 
-    #def add_command(self, cmd_name, *cmd_arg):
     def add_command(self, cmd, stack_limit=0):
 
-        # cmd_data = self.get_command_data(cmd_name, *cmd_arg)
         cmd = tuple(cmd)
         command = self._commands.get(cmd)
         if command:
@@ -283,8 +284,10 @@ class Invoker(object):
         cmd_arg = cmd[1:]
         cmd_class = self.get_command_class(cmd_name)
         command = cmd_class(self._obj, *cmd_arg)
+
         self._commands[cmd] = command
         self._command_stacks.setdefault(command.group_by(), tuple())
+        self._command_stack_limits[command.group_by] = stack_limit
 
         return command
 
@@ -296,44 +299,62 @@ class Invoker(object):
         return self._command_stacks[stack_id]
 
     def do(self, cmd):
+        # TODO: check stack limit, undo most recent command in stack to prevent
+        # overflow
         cmd = tuple(cmd)
         command = self._commands[cmd]
+        stack_id = command.group_by()
+        stack_limit = self._command_stack_limits.get(stack_id, 0)
+        stack = self._command_stacks[stack_id]
+
+        if stack_limit > 0:
+            while len(stack) >= stack_limit:
+                stack = self._undo(None, stack, 0)
+
         command.execute()
 
-        stack_id = command.group_by()
-        new_stack = (command,) + self._command_stacks[stack_id]
-        self._command_stacks[stack_id] = new_stack
+        self._command_stacks[stack_id] = (command, *stack)
 
     def undo(self, cmd):
 
         cmd = tuple(cmd)
         command = self._commands[cmd]
         stack_id = command.group_by()
-        stack = self._command_stacks.get(stack_id)
+        new_stack = self._undo(command, self._command_stacks.get(stack_id))
+        self._command_stacks[stack_id] = new_stack
+
+        return command
+
+    def _undo(self, command, stack, i_cmd=-1):
+        """command default is stack[i_cmd]"""
 
         #stack either doesn't exist or is empty
         if not stack:
-            return
+            return UndoError("No non-empty undo stack for {}".format(command))
 
-        for i_cmd, to_undo in enumerate(stack):
-            if command is to_undo:
-                break
-        else:
-            # nothing to undo
-            return
+
+        if i_cmd < 0 and command:
+            for i_cmd, to_undo in enumerate(stack):
+                if command is to_undo:
+                    break
+            else:
+                # nothing to undo
+                raise UndoError("{} not in undo stack".format(command))
+        elif not command:
+            command = stack[i_cmd]
 
         # run the revert method if it exists. otherwise, if the command to undo
         # is at the top of the stack, run the previous command to restore the
         # previous state
-        if to_undo.revert:
-            to_undo.revert()
+        if command.revert:
+            command.revert()
         elif not i_cmd:
             if len(stack) == 1:
-                return
+                # raise exception if there is no "previous" state to restore
+                raise UndoError("{} has no revert method and is the only command in its undo stack".format(command))
             stack[1].execute()
 
-        self._command_stacks[stack_id] = stack[:i_cmd] + stack[i_cmd+1:]
-        return to_undo
+        return stack[:i_cmd] + stack[i_cmd+1:]
 
 class Instrument(object):
 

@@ -1,6 +1,7 @@
 import pytest, os, pkg_resources, yaml
 from collections import namedtuple
 from pygame.locals import *
+from chordcontroller import UndoError
 
 os.environ["RTMIDI_API"] = "RTMIDI_DUMMY"
 
@@ -56,7 +57,7 @@ def chord_root_position(request):
 
 @pytest.fixture(params=[
     # press A, then release A, then release A
-    ("quality_modifier", (0, True, 1), (0, False, 0), (0, False, 0)),
+    ("quality_modifier", (0, True, 1), (0, False, 0)),
     # press A, then press B, then release B, then release A
     ("quality_modifier", (0, True, 1), (1, True, 2), (1, False, 1), (0, False, 0)),
     # press A, then press B, then release A then release B
@@ -68,6 +69,7 @@ def chord_root_position(request):
     (("extension_modifier"), (3, True, 1), (3, False, 0)),
     # press X, then press Y, then release Y, then release X
     (("extension_modifier"), (2, True, 1), (3, True, 2), (3, False, 1), (2, False, 0)),
+    ("quality_modifier", (0, True, 1), (0, False, 0), (0, False, UndoError)),
 ])
 def button_sequence(request):
     expected_attr = request.param[0]
@@ -188,8 +190,9 @@ class TestCommandsAndInvoker(object):
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_0)
 
-        # undoing a command that was never executed should have no effect
-        assert not invoker.undo(("set", "button", 1000))
+        # undoing a command that was never executed should raise exception
+        with pytest.raises(Exception):
+            invoker.undo(("set", "button", 1000))
         assert obj.button == 2
         assert invoker.get_command_stack(("set", "button")) == (
             cmd_set_button_2, cmd_set_button_0)
@@ -199,9 +202,10 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
-        # undoing the only command in the stack should have no effect if
+        # undoing the only command in the stack should raise exception if
         # the command has no revert method
-        assert not invoker.undo(("set", "button", 0))
+        with pytest.raises(Exception):
+            invoker.undo(("set", "button", 0))
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
@@ -304,5 +308,11 @@ class TestChordController(object):
         chord_controller = ChordController(input_handler, instrument)
 
         for d in button_sequence:
-            chord_controller.update([d["button_event"]])
-            assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
+            ev = d["expected_value"]
+            if type(ev) is type and issubclass(ev, Exception):
+                with pytest.raises(ev):
+                    chord_controller.update([d["button_event"]])
+            else:
+                chord_controller.update([d["button_event"]])
+                assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
+
