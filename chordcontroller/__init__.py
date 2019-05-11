@@ -228,7 +228,7 @@ class PlayScalePosition(Command):
         self._position = position
 
     def execute(self):
-        obj.play_scale_position(self._position)
+        self._obj.play_scale_position(self._position)
 
     def group_by(self, include_obj=False):
         if include_obj:
@@ -287,7 +287,7 @@ class Invoker(object):
 
         self._commands[cmd] = command
         self._command_stacks.setdefault(command.group_by(), tuple())
-        self._command_stack_limits[command.group_by] = stack_limit
+        self._command_stack_limits[command.group_by()] = stack_limit
 
         return command
 
@@ -298,9 +298,10 @@ class Invoker(object):
     def get_command_stack(self, stack_id):
         return self._command_stacks[stack_id]
 
+    def get_command_stack_limit(self, stack_id):
+        return self._command_stack_limits[stack_id]
+
     def do(self, cmd):
-        # TODO: check stack limit, undo most recent command in stack to prevent
-        # overflow
         cmd = tuple(cmd)
         command = self._commands[cmd]
         stack_id = command.group_by()
@@ -487,7 +488,11 @@ class Instrument(object):
 
         self._chord = self.construct_chord(scale_position)
 
-    def send_note_on(note_values, velocity=None):
+    @property
+    def playing_notes(self):
+        return frozenset(self._playing_notes)
+
+    def send_note_on(self, note_values, velocity=None):
         """
         Send a MIDI note-on message for each specified note.
         
@@ -504,11 +509,12 @@ class Instrument(object):
         for voice in note_values:
             # velocity = 0x70 - round(modifiers.get("velocity", 0)**1.7 * 0x70)
             self._midi_device.send_message(NoteOn(voice, velocity=velocity))
-        
         if velocity:
             self._playing_notes.update(note_values)
         else:
-            self._playing_notes.discard(note_values)
+            print("discarding", note_values, "from", self._playing_notes)
+            self._playing_notes.difference_update(note_values)
+            print("discarded from", self._playing_notes)
 
     def send_mod_wheel(self, mod_wheel):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
@@ -529,7 +535,10 @@ class ChordController(object):
     )
 
     def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
-
+        """
+        input_handler can be either instance of InputHandler, or a map of config
+        settings to pass to a new InputHandler instance
+        """
         if issubclass(type(input_handler), InputHandler):
             self.input_handler = input_handler
         else:
@@ -538,19 +547,22 @@ class ChordController(object):
         self.instrument = instrument or Instrument()
         self.invoker = Invoker(self.instrument, (*self._default_cmd_classes, *extra_cmd_classes))
 
-        # for "set" commands, we need a default value at the bottom of the undo
-        # stack. we will create a command based on the initial value of the
-        # attribute to set, then run that command immediately
+        # add commands to invoker
         is_fallback_needed = set()
         for k_mode, mode in input_handler.mappings.items():
             for do in commands_from_input_mapping(mode):
                 cmd = self.invoker.add_command(do)
+
                 if (
                     issubclass(cmd.__class__, SetAttribute) and
                     not cmd.revert and
                     (cmd.group_by(), tuple()) in self.invoker.command_stacks
                 ):
                     is_fallback_needed.add(cmd.group_by())
+
+        # for "set" commands, we need a default value at the bottom of the undo
+        # stack. we will create a command based on the initial value of the
+        # attribute to set, then run that command immediately
         for x in is_fallback_needed:
             fallback_arg = (x[0], x[1], (getattr(self.instrument, x[1], None)))
             self.invoker.add_command(fallback_arg)
@@ -559,21 +571,19 @@ class ChordController(object):
 
     def update(self, events):
         response = self.input_handler.update(events)
-        p = [*filter(lambda x: x[0] == "play_scale_position", response["to_do"])]
-        r = [*filter(lambda x: x[0] == "play_scale_position", response["to_undo"])]
+        for action in response["to_undo"]:
+            #if not (p and r and (action in r)):
+            self.invoker.undo(action)
         for action in response["to_do"]:
             self.invoker.do(action)
-        for action in response["to_undo"]:
-            if not (p and r and (action in r)):
-                self.invoker.undo(action)
 
 class InputHandler(object):
 
-    def __init__(self, config):
+    def __init__(self, config, joystick_index=-1):
         # self._instrument = instrument
 
         # self._joysticks = []
-        self._joystick_index = -1
+        self._joystick_index = joystick_index
         self._most_recent_hat_vector = {0: Vector(0,0)}
 
         self.axis_calibration = config["axis_calibration"]
@@ -687,7 +697,6 @@ class InputHandler(object):
         return keymap.get("hats", {}).get("{0}:{1}:{2}".format(hat, value.x, value.y), [])
 
     def update(self, events):
-        # modifier_inputs = self.read_modifier_inputs()
 
         to_do = []
         to_undo = []

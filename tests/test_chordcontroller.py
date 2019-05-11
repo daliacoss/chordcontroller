@@ -69,6 +69,8 @@ def chord_root_position(request):
     (("extension_modifier"), (3, True, 1), (3, False, 0)),
     # press X, then press Y, then release Y, then release X
     (("extension_modifier"), (2, True, 1), (3, True, 2), (3, False, 1), (2, False, 0)),
+
+    # press A, then release A, then release A (testing UndoError)
     ("quality_modifier", (0, True, 1), (0, False, 0), (0, False, UndoError)),
 ])
 def button_sequence(request):
@@ -209,16 +211,32 @@ class TestCommandsAndInvoker(object):
         assert obj.button == 0
         assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
 
+    def test_invoker_stack_limit(self):
+
+        from chordcontroller import SetAttribute, IncrementAttribute, Invoker
+
+        obj = ButtonEvent(-1)
+        invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
+
+        cmd_set_button_0 = invoker.add_command(("set", "button", 0), stack_limit=2)
+        cmd_set_button_1 = invoker.add_command(("set", "button", 1), stack_limit=0)
+        cmd_set_button_2 = invoker.add_command(("set", "button", 2), stack_limit=2)
+        assert invoker.get_command_stack_limit(("set", "button")) == 2
+
+        invoker.do(("set", "button", 0))
+        invoker.do(("set", "button", 1))
+        invoker.do(("set", "button", 2))
+        assert obj.button == 2
+        assert len(invoker.get_command_stack(("set", "button"))) == 2
+        invoker.undo(("set", "button", 2))
+        assert obj.button == 0
+
 def test_commands_from_input_mapping(mapping):
     from chordcontroller import commands_from_input_mapping
 
     cmds = set((tuple(c) for c in commands_from_input_mapping(mapping)))
-    #cmds = commands_from_input_mapping(mapping)
     expected = set((("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1), ("play_scale_position", 0)))
     assert cmds == expected
-    #for i, c in enumerate(cmds)
-        #print(c)
-        #assert tuple(c) in expected
 
 class TestInstrument(object):
 
@@ -300,7 +318,9 @@ class TestChordController(object):
     def test_init(self, input_handler, instrument):
         from chordcontroller import ChordController
 
-        ChordController(input_handler, instrument)
+        j = input_handler.joystick_index
+        chord_controller = ChordController(input_handler, instrument)
+        assert chord_controller.input_handler.joystick_index == j
 
     def test_update(self, input_handler, instrument, button_sequence):
         from chordcontroller import ChordController
@@ -316,3 +336,18 @@ class TestChordController(object):
                 chord_controller.update([d["button_event"]])
                 assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
 
+    def test_play(self, input_handler, instrument):
+
+        from chordcontroller import ChordController, Vector
+
+        chord_controller = ChordController(input_handler, instrument)
+        chord_controller.input_handler.joystick_index = 0
+
+        chord_controller.update([HatEvent(Vector.UP)])
+        assert chord_controller.instrument.playing_notes == {60, 64, 67}
+
+        chord_controller.update([HatEvent(Vector.DOWN)])
+        assert chord_controller.instrument.playing_notes == {60, 64, 67}
+
+        chord_controller.update([HatEvent(Vector.NEUTRAL)])
+        assert not chord_controller.instrument.playing_notes
