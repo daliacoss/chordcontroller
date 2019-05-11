@@ -312,6 +312,27 @@ class TestInputHandler(object):
         assert not response["to_do"]
         assert response["to_undo"] == [["play_scale_position", 4]]
 
+        # test easy diagonals
+        assert input_handler.hat_calibration[0]["easy_diagonals"]
+        input_handler.update([HatEvent(Vector.UP)])
+        response = input_handler.update([HatEvent(Vector.UPLEFT)])
+        assert response["to_do"] == [["play_scale_position", 6]]
+        assert response["to_undo"] == [["play_scale_position", 0]]
+        response = input_handler.update([HatEvent(Vector.LEFT)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+        response = input_handler.update([HatEvent(Vector.UP)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+        response = input_handler.update([HatEvent(Vector.NEUTRAL)])
+        assert not response["to_do"]
+        assert response["to_undo"] == [["play_scale_position", 6]]
+
+        input_handler.update([HatEvent(Vector.UPLEFT)])
+        input_handler.update([HatEvent(Vector.LEFT)])
+        response = input_handler.update([HatEvent(Vector.DOWNLEFT)])
+        assert response["to_do"] == [["play_scale_position", 5]] 
+        assert response["to_undo"] == [["play_scale_position", 6]]
 
 class TestChordController(object):
 

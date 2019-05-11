@@ -512,9 +512,7 @@ class Instrument(object):
         if velocity:
             self._playing_notes.update(note_values)
         else:
-            print("discarding", note_values, "from", self._playing_notes)
             self._playing_notes.difference_update(note_values)
-            print("discarded from", self._playing_notes)
 
     def send_mod_wheel(self, mod_wheel):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
@@ -588,6 +586,7 @@ class InputHandler(object):
 
         self.axis_calibration = config["axis_calibration"]
         self.mappings = config["mappings"]
+        self.hat_calibration = config["hat_calibration"]
         self.mode = "mode_default"
 
         self._uncalibrated_axes = set()
@@ -619,8 +618,10 @@ class InputHandler(object):
         return diff[0] == 0 and diff[1] == 1
 
     def is_cardinal(self, v):
-        return 0 in v
-    #
+        return bool(v[0]) ^ bool(v[1])
+
+    def is_diagonal(self, v):
+        return v[0] and v[1]
     # def read_modifier_inputs(self):
     #     joystick = self._joysticks[self._joystick_index]
     #     min_trigger, max_trigger = self.calibration["min_trigger"], self.calibration["max_trigger"]
@@ -708,8 +709,8 @@ class InputHandler(object):
             except AttributeError:
                 continue
 
-            # if we're not tracking any joystick, start tracking the one for
-            # this event.
+            # if we're not tracking any joystick, and this is a button press,
+            # start tracking the joystick the button was pressed on.
             # else if we're already tracking a joystick other than this one,
             # do nothing and go to next event
             if joy_index != self._joystick_index:
@@ -718,7 +719,6 @@ class InputHandler(object):
                 else:
                     continue
 
-            # joystick = self._joysticks[self._joystick_index]
             keymap = self.mappings[self.mode]
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
                 for data in keymap.get("buttons", {}).get(event.button, []):
@@ -729,17 +729,20 @@ class InputHandler(object):
                         to_undo.append(data["do"])
 
             elif event.type == JOYHATMOTION:
-                
+
                 prev_value = self._most_recent_hat_vector.get(event.hat)
                 value = Vector(*event.value)
                 is_neutral = (value == Vector.NEUTRAL)
-                # if is_neutral:
-                #     if not most_recent_hat_vector:
-                #         self._most_recent_hat_vector[event.hat] = Vector.NEUTRAL
-                #         continue
-                #     key_vector = most_recent_hat_vector
-                # else:
-                #     key_vector = value
+
+                # easy diagonals: if the most recent dpad event was a diagonal
+                # press, ignore presses in any of the adjacent cardinal directions
+                # (prevents accidentally playing the wrong chord)
+                if (
+                    self.hat_calibration.get(event.hat, {}).get("easy_diagonals")
+                    and self.is_diagonal(prev_value)
+                    and self.are_adjacent(value, prev_value) 
+                ):
+                    continue
 
                 if not is_neutral:
                     for data in self._get_hat_actions(keymap, event.hat, value):
