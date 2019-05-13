@@ -89,7 +89,27 @@ def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
 
     return inversion
 
-Vector = namedtuple("Vector", ("x", "y"))
+class Vector(namedtuple("Vector", ("x", "y"))):
+    def is_adjacent_to(self, other):
+        """
+        return True if vector directions are diagonally 'adjacent' to each other
+        (e.g., (0,1) and (1,1))
+        if vectors are equal, return False.
+        if either vector is (0,0), return False.
+        """
+
+        if (0,0) in (self, other):
+            return False
+
+        diff = sorted((abs(self.x-other.x), abs(self.y-other.y)))
+        return diff[0] == 0 and diff[1] == 1
+
+    def is_cardinal(self):
+        return bool(self[0]) ^ bool(self[1])
+
+    def is_diagonal(self):
+        return self[0] and self[1]
+
 Vector.DOWN = Vector(0,-1)
 Vector.UP = Vector(0,1)
 Vector.RIGHT = Vector(1,0)
@@ -602,26 +622,6 @@ class InputHandler(object):
     def joystick_index(self, v):
         self._joystick_index = v
 
-    def are_adjacent(self, a, b):
-
-        """
-        return True if vector directions are diagonally 'adjacent' to each other
-        (e.g., (0,1) and (1,1))
-        if vectors are equal, return False.
-        if either vector is (0,0), return False.
-        """
-
-        if (0,0) in (a, b):
-            return False
-
-        diff = sorted((abs(a.x-b.x), abs(a.y-b.y)))
-        return diff[0] == 0 and diff[1] == 1
-
-    def is_cardinal(self, v):
-        return bool(v[0]) ^ bool(v[1])
-
-    def is_diagonal(self, v):
-        return v[0] and v[1]
     # def read_modifier_inputs(self):
     #     joystick = self._joysticks[self._joystick_index]
     #     min_trigger, max_trigger = self.calibration["min_trigger"], self.calibration["max_trigger"]
@@ -739,8 +739,8 @@ class InputHandler(object):
                 # (prevents accidentally playing the wrong chord)
                 if (
                     self.hat_calibration.get(event.hat, {}).get("easy_diagonals")
-                    and self.is_diagonal(prev_value)
-                    and self.are_adjacent(value, prev_value) 
+                    and prev_value.is_diagonal()
+                    and prev_value.is_adjacent_to(value) 
                 ):
                     continue
 

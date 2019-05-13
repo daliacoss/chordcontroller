@@ -101,6 +101,42 @@ def test_chord_inversions(chord_root_position):
         negative_inversion = Chord(root, voicing = i - len(chord_root_position), extensions=extensions)
         assert inversion == tuple(x + 12 for x in negative_inversion)
 
+class TestVector(object):
+    
+    def test_equality(self):
+        from chordcontroller import Vector
+
+        assert Vector(0,0) == (0,0)
+        assert Vector(0,1) == (0,1)
+        assert Vector(0,1) == Vector(0,1)
+        assert Vector(1,0) != (0,1)
+        assert Vector(1,0) != Vector(0,1)
+
+    def test_adjacent(self):
+        from chordcontroller import Vector
+
+        assert not Vector(0,0).is_adjacent_to(Vector(0,1))
+        assert not Vector(0,0).is_adjacent_to(Vector(0,0))
+        assert not Vector(1,0).is_adjacent_to(Vector(1,0))
+        assert Vector(1,1).is_adjacent_to(Vector(1,0))
+        assert Vector(1,0).is_adjacent_to(Vector(1,1))
+
+    def test_diagonal_and_cardinal(self):
+        from chordcontroller import Vector
+ 
+        for v in [(1,1),(-1,-1),(1,-1),(-1,1)]:
+            v = Vector(*v)
+            assert v.is_diagonal()
+            assert not v.is_cardinal()
+        for v in [(0,1),(1,0),(0,-1),(-1,0)]:
+            v = Vector(*v)
+            assert v.is_cardinal()
+            assert not v.is_diagonal()
+
+        v = Vector(0,0)
+        assert not v.is_cardinal()
+        assert not v.is_diagonal()
+
 class TestCommandsAndInvoker(object):
 
     def test_set_attribute(self):
