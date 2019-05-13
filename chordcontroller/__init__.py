@@ -142,9 +142,6 @@ class Command(object):
 
         raise NotImplementedError
 
-    # def name(self):
-        # return self.__class__.__name__
-
     name = "command"
     revert = False
 
@@ -621,61 +618,6 @@ class InputHandler(object):
     @joystick_index.setter
     def joystick_index(self, v):
         self._joystick_index = v
-
-    # def read_modifier_inputs(self):
-    #     joystick = self._joysticks[self._joystick_index]
-    #     min_trigger, max_trigger = self.calibration["min_trigger"], self.calibration["max_trigger"]
-    #
-    #     items = tuple()
-    #     for k, axis in self.mappings["axes"].items():
-    #         if axis in self._uncalibrated_axes:
-    #             value = 0
-    #         else:
-    #             value = (joystick.get_axis(axis) - min_trigger) / (max_trigger - min_trigger)
-    #         items += ((k, value),)
-    #
-    #     items += tuple( (k, joystick.get_button(v)) for k, v in self.mappings["momentary"].items() )
-    #
-    #     return dict(items)
-    #
-    # def handle_voicing_slider(self, voicing_input):
-    #     for i, r in enumerate(self.mappings["voicing_ranges"]):
-    #         if voicing_input <= r:
-    #             break
-    #     return i
-
-    def handle_hat_motion(self, vector, modifier_inputs):
-        """
-        maps d-pad event to the correct Instrument method and returns that
-        method, along with appropriate args and kwargs, without calling it.
-
-        if no Instrument method should be called for this vector, returns None
-        and empty arg collections.
-        """
-
-        method = None
-        kwargs = {}
-
-        if vector != (0,0):
-            # don't register a d-pad press in any of the cardinal directions
-            # if the most recent d-pad event was a diagonal press
-            # (prevent accidentally playing the wrong chord)
-            if not (self.is_cardinal(vector) and self.are_adjacent(vector, self._most_recent_hat_vector)):
-
-                kwargs = dict(scale_position=self.mappings["scale_positions"][vector])
-
-                if modifier_inputs["do_change_tonic"]:
-                    method = self._instrument.set_next_tonic_from_sp
-                    kwargs.update(flatten_by=modifier_inputs["do_flatten"])
-                # elif modifier_inputs["do_change_harmony"]:
-                    # method = self._instrument.set_next_
-                else:
-                    modifier_inputs["voicing"] = self.handle_voicing_slider(modifier_inputs["voicing"])
-                    method = self._instrument.play_chord
-                    kwargs.update(**modifier_inputs)
-        elif not modifier_inputs["do_change_tonic"]:
-            method = self._instrument.release_chord
-        return method, kwargs
 
     def map_float_to_range(self, input_value, value_at_min, value_at_max, **data):
 
