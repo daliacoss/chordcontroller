@@ -592,6 +592,46 @@ class ChordController(object):
         for action in response["to_do"]:
             self.invoker.do(action)
 
+
+def value_in_range(percent, value_at_min, value_at_max, **data):
+    """
+    Multiply a percentage by an arbitrary range.
+
+    Optional arguments:
+        steps: iterable of discrete percentage steps in the range.
+        
+    If `steps` is specified, the following procedure is used to calculate the
+    result:
+        1. Sort `steps` if not already sorted.
+        2. Append 1 to the end of `steps` if it is not already the last element.
+        3. Let X be `(value_at_max - value_at_min) / len(steps)`.
+        4. Let K be the index of the lowest step that is equal to or greater than 
+        `percent`.
+        5. Let result be `(X * K) + value_at_min`.
+    
+    Example:
+        (.1, 0, 10, steps=[.25, .5, .75, 1]) => 0
+        (.4, 0, 10, steps=[.25, .5, .75, 1]) => 2.5
+        (.4, 0, 10, steps=[.39, .5, .75, 1]) => 2.5
+    """
+
+    if percent < 0 or percent > 1:
+        raise ValueError("percent must be between 0 and 1 (inclusive)")
+
+    steps = data.get("steps")
+    if steps:
+        steps = sorted(steps)
+        if steps[-1] == 1:
+            steps = steps[:-1]
+        x = (value_at_max - value_at_min) / (len(steps) + 1)
+        for i, step in enumerate(steps):
+            if percent <= step:
+                return i * x + value_at_min
+        else:
+            return value_at_max
+    else:
+        return (value_at_max - value_at_min) * percent + value_at_min
+
 class InputHandler(object):
 
     def __init__(self, config, joystick_index=-1):
@@ -618,19 +658,6 @@ class InputHandler(object):
     @joystick_index.setter
     def joystick_index(self, v):
         self._joystick_index = v
-
-    def map_float_to_range(self, input_value, value_at_min, value_at_max, **data):
-
-        if input_value < 0 or input_value > 1:
-            raise ValueError("input_value must be between 0 and 1")
-
-        if data.get("steps"):
-            x = (value_at_max - value_at_min) / len(data["steps"])
-            for step in steps:
-                if input_value <= step:
-                    return x * step + value_at_min
-        else:
-            return (value_at_max - value_at_min) * input_value + value_at_min
 
     def clamp_axis_value(self, axis_id, raw_axis_value):
         calibration = self.axis_calibration[axis_id]
@@ -706,7 +733,7 @@ class InputHandler(object):
                     self._uncalibrated_axes.discard(event.axis)
 
                 for data in keymap.get("axes", {}).get(event.axis):
-                    processed_value = self.map_float_to_range(self.clamp_axis_value(event.value), **data)
+                    processed_value = value_in_range(self.clamp_axis_value(event.value), **data)
                     if processed_value != None:
                         to_do.append(data["do"] + [processed_value])
 

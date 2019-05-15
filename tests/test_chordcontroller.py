@@ -10,17 +10,21 @@ os.environ["RTMIDI_API"] = "RTMIDI_DUMMY"
 ############
 
 class Event(object):
-    def __init__(self, type, **params):
+    def __init__(self, _type, **params):
         self.__dict__ = params
-        self.type = type
+        self.type = _type
 
 class ButtonEvent(Event):
     def __init__(self, button, is_down=True, joy=0):
-        super().__init__(type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
+        super().__init__(_type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
 
 class HatEvent(Event):
     def __init__(self, value, hat=0, joy=0):
-        super().__init__(value=value, type=JOYHATMOTION, hat=hat, joy=joy)
+        super().__init__(value=value, _type=JOYHATMOTION, hat=hat, joy=joy)
+
+class AxisEvent(Event):
+    def __init__(self, value, axis, joy=0):
+        super().__init__(value=value, _type=JOYAXISMOTION, axis=axis, joy=joy)
 
 @pytest.fixture
 def mapping():
@@ -100,6 +104,22 @@ def test_chord_inversions(chord_root_position):
         # -2 the first inversion minus an octave, etc
         negative_inversion = Chord(root, voicing = i - len(chord_root_position), extensions=extensions)
         assert inversion == tuple(x + 12 for x in negative_inversion)
+
+def test_value_in_range():
+    from chordcontroller import value_in_range
+
+    assert value_in_range(0, 0, 127) == 0
+    assert value_in_range(1, 0, 127) == 127
+    assert value_in_range(.4, 0, 127) == 127 * .4
+    assert value_in_range(0, 127, 0) == 127
+    assert round(value_in_range(.4, 127, 0), 3) == 76.2 
+
+    # test with steps
+    assert value_in_range(.3, 0, 10, steps=[.2,.4,.6,.8]) == 2 
+    assert value_in_range(.3, 0, 10, steps=[.2,.4,.6,.8,1]) == 2 
+    assert value_in_range(.3, 0, 10, steps=[0,.2,.4,.6,.8]) == (10/6) * 2
+    assert value_in_range(.000001, 0, 10, steps=[0,.2,.4,.6,.8]) == (10/6)
+    assert value_in_range(0, 0, 10, steps=[0,.2,.4,.6,.8]) == 0
 
 class TestVector(object):
     
@@ -331,7 +351,12 @@ class TestInputHandler(object):
         response = input_handler.update([ButtonEvent(0, is_down=False)])
         assert not response["to_do"]
         assert response["to_undo"] == [["set", "quality_modifier", 1]]
-    
+
+    @pytest.mark.xfail
+    def test_axis_motion(self, input_handler):
+        response = input_handler.update([AxisEvent(axis=4, value=0.0)])
+        assert response["to_do"]
+
     def test_hat_motion(self, input_handler):
         from chordcontroller import Vector
         input_handler.joystick_index = 0
