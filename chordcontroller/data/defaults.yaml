@@ -83,7 +83,7 @@ mappings:
             *AXIS_RTRIGGER:
                 - do: [set, velocity,]
                   curve: 1.7
-                  value_at_min: 127
+                  value_at_min: 0x70
                   value_at_max: 0
             *AXIS_LTRIGGER:
                 - do: [set, voicing,]

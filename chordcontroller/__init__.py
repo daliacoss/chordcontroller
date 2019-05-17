@@ -535,11 +535,21 @@ class Instrument(object):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
 
 def commands_from_input_mapping(mapping):
+
     commands = []
-    for x in ["hats", "buttons"]:
+
+    def to_extend(action, t):
+        print(action)
+        do = action["do"]
+        if t == "axes":
+            return [*do, action["value_at_min"]], [*do, action["value_at_max"]]
+        else:
+            return [do]
+
+    for x in ["hats", "buttons", "axes"]:
         for switch_name, switch_actions in mapping.get(x, {}).items():
             for action in switch_actions:
-                commands.append(action["do"])
+                commands.extend(to_extend(action, x))
 
     return commands
 
@@ -593,44 +603,44 @@ class ChordController(object):
             self.invoker.do(action)
 
 
-def value_in_range(percent, value_at_min, value_at_max, **data):
+def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):
     """
     Multiply a percentage by an arbitrary range.
 
     Optional arguments:
+        curve: exponent to apply to percent. Ignored if `steps` is non-empty.
+        inclusive: if False, and if `steps` is non-empty, result will always be
+        less than `value_at_max`.
         steps: iterable of discrete percentage steps in the range.
         
     If `steps` is specified, the following procedure is used to calculate the
     result:
         1. Sort `steps` if not already sorted.
-        2. Append 1 to the end of `steps` if it is not already the last element.
         3. Let X be `(value_at_max - value_at_min) / len(steps)`.
-        4. Let K be the index of the lowest step that is equal to or greater than 
-        `percent`.
-        5. Let result be `(X * K) + value_at_min`.
-    
-    Example:
-        (.1, 0, 10, steps=[.25, .5, .75, 1]) => 0
-        (.4, 0, 10, steps=[.25, .5, .75, 1]) => 2.5
-        (.4, 0, 10, steps=[.39, .5, .75, 1]) => 2.5
+        4. Let K be the index of the lowest step that is greater than `percent`.
+        5. If K is defined or `inclusive` is True, let result be
+        `(X * K) + value_at_min`.
+        5. Else, let result be `value_at_max`. 
     """
 
     if percent < 0 or percent > 1:
         raise ValueError("percent must be between 0 and 1 (inclusive)")
+    if curve < 0:
+        raise ValueError("curve must be greater than 0")
 
-    steps = data.get("steps")
-    if steps:
-        steps = sorted(steps)
-        if steps[-1] == 1:
-            steps = steps[:-1]
-        x = (value_at_max - value_at_min) / (len(steps) + 1)
-        for i, step in enumerate(steps):
-            if percent <= step:
-                return i * x + value_at_min
-        else:
-            return value_at_max
+    if not steps:
+        return (value_at_max - value_at_min) * (percent**curve) + value_at_min
+
+    steps = sorted(steps)
+    x = (value_at_max - value_at_min) / (len(steps) )
+    for i, step in enumerate(steps):
+        if percent < step:
+            return i * x + value_at_min
     else:
-        return (value_at_max - value_at_min) * percent + value_at_min
+        if inclusive:
+            return value_at_max
+        else:
+            return i * x + value_at_min
 
 class InputHandler(object):
 
@@ -661,7 +671,7 @@ class InputHandler(object):
 
     def clamp_axis_value(self, axis_id, raw_axis_value):
         calibration = self.axis_calibration[axis_id]
-        return (raw_axis_value - calibration.min) / (calibration.max - calibration.min)
+        return (raw_axis_value - calibration["min"]) / (calibration["max"] - calibration["min"])
 
     def _get_hat_actions(self, keymap, hat, value):
         return keymap.get("hats", {}).get("{0}:{1}:{2}".format(hat, value.x, value.y), [])
@@ -728,12 +738,11 @@ class InputHandler(object):
                 self._most_recent_hat_vector[event.hat] = value
 
             elif event.type == JOYAXISMOTION:
-
                 if event.axis in self._uncalibrated_axes:
                     self._uncalibrated_axes.discard(event.axis)
 
                 for data in keymap.get("axes", {}).get(event.axis):
-                    processed_value = value_in_range(self.clamp_axis_value(event.value), **data)
+                    processed_value = value_in_range(self.clamp_axis_value(event.axis, event.value), **data)
                     if processed_value != None:
                         to_do.append(data["do"] + [processed_value])
 

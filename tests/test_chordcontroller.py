@@ -112,14 +112,29 @@ def test_value_in_range():
     assert value_in_range(1, 0, 127) == 127
     assert value_in_range(.4, 0, 127) == 127 * .4
     assert value_in_range(0, 127, 0) == 127
+    assert value_in_range(.5, -1, 1) == 0
     assert round(value_in_range(.4, 127, 0), 3) == 76.2 
+    with pytest.raises(ValueError):
+        value_in_range(-0.00001, 0, 127)
+    with pytest.raises(ValueError):
+        value_in_range(1.00001, 0, 127)
+    
+    # test with curve
+    assert round(value_in_range(.5, 127, 0, curve=1.7), 3) == 87.911
+    with pytest.raises(ValueError):
+        value_in_range(.5, 127, 0, curve=-0.00001)
 
     # test with steps
-    assert value_in_range(.3, 0, 10, steps=[.2,.4,.6,.8]) == 2 
-    assert value_in_range(.3, 0, 10, steps=[.2,.4,.6,.8,1]) == 2 
-    assert value_in_range(.3, 0, 10, steps=[0,.2,.4,.6,.8]) == (10/6) * 2
-    assert value_in_range(.000001, 0, 10, steps=[0,.2,.4,.6,.8]) == (10/6)
-    assert value_in_range(0, 0, 10, steps=[0,.2,.4,.6,.8]) == 0
+    assert value_in_range(.3, 0, 10, steps=[.2, .4, .6, .8, 1]) == 2 
+    assert value_in_range(1, 0, 10, steps=[.2, .4, .6, .8, 1]) == 10 
+    assert value_in_range(.3, 0, 10, steps=[.2, .4, .6, .8, 1], inclusive=False) == 2
+    assert value_in_range(1, 0, 10, steps=[.2, .4, .6, .8, 1], inclusive=False) == 8
+    assert value_in_range(1, 0, 10, steps=[.25, .5, .75, 1], inclusive=False) == 7.5
+    assert value_in_range(.3, 0, 10, steps=[.2, .4, .6, .8]) == 2.5
+    assert value_in_range(.800001, 0, 10, steps=[.2, .4, .6, .8]) == 10
+    assert value_in_range(.800001, 0, 10, steps=[.2, .4, .6, .8], inclusive=False) == 7.5
+
+    assert value_in_range(.000001, 0, 8, steps=[0,.2,.4,.6,.8]) == (8/5)
 
 class TestVector(object):
     
@@ -354,8 +369,26 @@ class TestInputHandler(object):
 
     @pytest.mark.xfail
     def test_axis_motion(self, input_handler):
-        response = input_handler.update([AxisEvent(axis=4, value=0.0)])
-        assert response["to_do"]
+
+        from chordcontroller import value_in_range
+        input_handler.joystick_index = 0
+
+        response = input_handler.update([AxisEvent(axis=4, value=-1.0)])
+        assert response["to_do"] == [["set", "velocity", 112]]
+
+        response = input_handler.update([AxisEvent(axis=4, value=1.0)])
+        assert not response["to_undo"]
+        assert response["to_do"] == [["set", "velocity", 0]]
+
+        response = input_handler.update([AxisEvent(axis=4, value=0)])
+        assert not response["to_undo"]
+        assert response["to_do"] == [["set", "velocity", value_in_range(.5, 112, 0, 1.7)]]
+
+        response = input_handler.update([AxisEvent(axis=5, value=-1.0)])
+        assert response["to_do"] == [["set", "voicing", 0]]
+
+        response = input_handler.update([AxisEvent(axis=5, value=-.1)])
+        assert response["to_do"] == [["set", "voicing", 2]]
 
     def test_hat_motion(self, input_handler):
         from chordcontroller import Vector
