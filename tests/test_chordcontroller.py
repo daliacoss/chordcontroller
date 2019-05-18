@@ -367,7 +367,13 @@ class TestInputHandler(object):
         assert not response["to_do"]
         assert response["to_undo"] == [["set", "quality_modifier", 1]]
 
-    @pytest.mark.xfail
+    def test_clamp_axis_value(self, input_handler):
+
+        a = 4
+        assert input_handler.clamp_axis_value(a, -1) == 0
+        assert input_handler.clamp_axis_value(a, 1) == 1
+        assert input_handler.clamp_axis_value(a, .4) == .7
+
     def test_axis_motion(self, input_handler):
 
         from chordcontroller import value_in_range

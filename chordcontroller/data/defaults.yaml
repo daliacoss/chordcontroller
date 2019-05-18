@@ -88,7 +88,8 @@ mappings:
             *AXIS_LTRIGGER:
                 - do: [set, voicing,]
                   value_at_min: 0
-                  value_at_max: 3
+                  value_at_max: 4
+                  inclusive: False
                   steps:
                       - .05
                       - .4

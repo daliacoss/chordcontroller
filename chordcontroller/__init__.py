@@ -539,7 +539,6 @@ def commands_from_input_mapping(mapping):
     commands = []
 
     def to_extend(action, t):
-        print(action)
         do = action["do"]
         if t == "axes":
             return [*do, action["value_at_min"]], [*do, action["value_at_max"]]
@@ -742,8 +741,10 @@ class InputHandler(object):
                     self._uncalibrated_axes.discard(event.axis)
 
                 for data in keymap.get("axes", {}).get(event.axis):
+                    data = dict(data)
+                    do = data.pop("do")
                     processed_value = value_in_range(self.clamp_axis_value(event.axis, event.value), **data)
                     if processed_value != None:
-                        to_do.append(data["do"] + [processed_value])
+                        to_do.append([*do, processed_value])
 
         return {"to_do": to_do, "to_undo": to_undo}
