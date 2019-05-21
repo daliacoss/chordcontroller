@@ -26,6 +26,10 @@ class AxisEvent(Event):
     def __init__(self, value, axis, joy=0):
         super().__init__(value=value, _type=JOYAXISMOTION, axis=axis, joy=joy)
 
+B = ButtonEvent
+H = HatEvent
+A = AxisEvent
+
 @pytest.fixture
 def mapping():
     return {
@@ -61,27 +65,36 @@ def chord_root_position(request):
 
 @pytest.fixture(params=[
     # press A, then release A, then release A
-    ("quality_modifier", (0, True, 1), (0, False, 0)),
+    ("quality_modifier", (B(0, True), 1), (B(0, False), 0)),
     # press A, then press B, then release B, then release A
-    ("quality_modifier", (0, True, 1), (1, True, 2), (1, False, 1), (0, False, 0)),
+    ("quality_modifier", (B(0, True), 1), (B(1, True), 2), (B(1, False), 1), (B(0, False), 0)),
     # press A, then press B, then release A then release B
-    ("quality_modifier", (0, True, 1), (1, True, 2), (0, False, 2), (1, False, 0)),
+    ("quality_modifier", (B(0, True), 1), (B(1, True), 2), (B(0, False), 2), (B(1, False), 0)),
     
     # press X, then release X
-    (("extension_modifier"), (2, True, 1), (2, False, 0)),
+    (("extension_modifier"), (B(2, True), 1), (B(2, False), 0)),
     # press Y, then release Y
-    (("extension_modifier"), (3, True, 1), (3, False, 0)),
+    (("extension_modifier"), (B(3, True), 1), (B(3, False), 0)),
     # press X, then press Y, then release Y, then release X
-    (("extension_modifier"), (2, True, 1), (3, True, 2), (3, False, 1), (2, False, 0)),
+    (("extension_modifier"), (B(2, True), 1), (B(3, True), 2), (B(3, False), 1), (B(2, False), 0)),
 
     # press A, then release A, then release A (testing UndoError)
-    ("quality_modifier", (0, True, 1), (0, False, 0), (0, False, UndoError)),
+    ("quality_modifier", (B(0, True), 1), (B(0, False), 0), (B(0, False), UndoError)),
+
+    # dpad up, then dpad down, then dpad neutral
+    ("playing_notes",
+        (H((0,1)), {60, 64, 67}),
+        (H((0,-1)), {60, 64, 67}),
+        (H((0,0)), set())
+    ),
+
+    ("velocity", (A(1.0, 4), 0x0), (A(-1.0, 4), 0x70))
 ])
-def button_sequence(request):
+def input_sequence(request):
     expected_attr = request.param[0]
     return [{
-        "button_event": ButtonEvent(p[0], is_down=p[1]),
-        "expected_value": p[2],
+        "input_event": p[0],
+        "expected_value": p[1],
         "expected_attr": expected_attr,
     } for p in request.param[1:]]
 
@@ -443,32 +456,18 @@ class TestChordController(object):
         chord_controller = ChordController(input_handler, instrument)
         assert chord_controller.input_handler.joystick_index == j
 
-    def test_update(self, input_handler, instrument, button_sequence):
+    def test_update(self, input_handler, instrument, input_sequence):
         from chordcontroller import ChordController
-
-        chord_controller = ChordController(input_handler, instrument)
-
-        for d in button_sequence:
-            ev = d["expected_value"]
-            if type(ev) is type and issubclass(ev, Exception):
-                with pytest.raises(ev):
-                    chord_controller.update([d["button_event"]])
-            else:
-                chord_controller.update([d["button_event"]])
-                assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
-
-    def test_play(self, input_handler, instrument):
-
-        from chordcontroller import ChordController, Vector
 
         chord_controller = ChordController(input_handler, instrument)
         chord_controller.input_handler.joystick_index = 0
 
-        chord_controller.update([HatEvent(Vector.UP)])
-        assert chord_controller.instrument.playing_notes == {60, 64, 67}
+        for d in input_sequence:
+            ev = d["expected_value"]
+            if type(ev) is type and issubclass(ev, Exception):
+                with pytest.raises(ev):
+                    chord_controller.update([d["input_event"]])
+            else:
+                chord_controller.update([d["input_event"]])
+                assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
 
-        chord_controller.update([HatEvent(Vector.DOWN)])
-        assert chord_controller.instrument.playing_notes == {60, 64, 67}
-
-        chord_controller.update([HatEvent(Vector.NEUTRAL)])
-        assert not chord_controller.instrument.playing_notes
