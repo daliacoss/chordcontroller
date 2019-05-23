@@ -372,6 +372,12 @@ class TestInputHandler(object):
 
     def test_button_press(self, input_handler):
 
+        # test momentary behavior
+
+        mb0 = input_handler.mappings[input_handler.mode]["buttons"][0]
+        assert len(mb0) == 1
+        assert mb0[0].get("behavior", "momentary") == "momentary"
+
         response = input_handler.update([ButtonEvent(0)])
         assert not response["to_undo"]
         assert response["to_do"] == [["set", "quality_modifier", 1]]
@@ -379,6 +385,27 @@ class TestInputHandler(object):
         response = input_handler.update([ButtonEvent(0, is_down=False)])
         assert not response["to_do"]
         assert response["to_undo"] == [["set", "quality_modifier", 1]]
+
+        # test latch behavior
+
+        mb0[0]["behavior"] = "latch"
+        response = input_handler.update([ButtonEvent(0)])
+        assert not response["to_undo"]
+        assert response["to_do"] == [["set", "quality_modifier", 1]]
+
+        response = input_handler.update([ButtonEvent(0, is_down=False)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+        
+        response = input_handler.update([ButtonEvent(0, is_down=True)])
+        assert response["to_do"] == [["set", "quality_modifier", 1]]
+        assert not response["to_undo"]
+
+        response = input_handler.update([ButtonEvent(0, is_down=False)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+
+        # TODO: test toggle behavior
 
     def test_clamp_axis_value(self, input_handler):
 
