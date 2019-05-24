@@ -594,13 +594,13 @@ class ChordController(object):
 
 
     def update(self, events):
+
         response = self.input_handler.update(events)
+
         for action in response["to_undo"]:
-            #if not (p and r and (action in r)):
             self.invoker.undo(action)
         for action in response["to_do"]:
             self.invoker.do(action)
-
 
 def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):
     """
@@ -660,6 +660,8 @@ class InputHandler(object):
             if settings.get("uncalibrated_at_start"):
                 self._uncalibrated_axes.add(k)
 
+        self._toggle_states = {}
+
     @property
     def joystick_index(self):
         return self._joystick_index
@@ -672,8 +674,21 @@ class InputHandler(object):
         calibration = self.axis_calibration[axis_id]
         return (raw_axis_value - calibration["min"]) / (calibration["max"] - calibration["min"])
 
-    def _get_hat_actions(self, keymap, hat, value):
-        return keymap.get("hats", {}).get("{0}:{1}:{2}".format(hat, value.x, value.y), [])
+    def _hat_key(self, hat, value):
+        return "{0}:{1}:{2}".format(hat, value.x, value.y)
+
+    def _get_hat_actions(self, keymap, hat_key):
+        return keymap.get("hats", {}).get(hat_key, [])
+
+    def _get_toggle_state(self, mode, input_type, input_key, action_index):
+        return self._toggle_states.get(
+            "{}.{}.{}.{}".format(mode, input_type, input_key, action_index), False
+        )
+
+    def _set_toggle_state(self, mode, input_type, input_key, action_index, value):
+        self._toggle_states[
+            "{}.{}.{}.{}".format(mode, input_type, input_key, action_index)
+        ] = value
 
     def update(self, events):
 
@@ -698,11 +713,20 @@ class InputHandler(object):
                     continue
 
             keymap = self.mappings[self.mode]
+            
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
-                for data in keymap.get("buttons", {}).get(event.button, []):
+
+                actions = keymap.get("buttons", {}).get(event.button, [])
+
+                for i, data in enumerate(actions):
                     behavior = data.get("behavior", "momentary")
                     if event.type == JOYBUTTONDOWN and behavior in ["momentary", "latch"]:
                         to_do.append(data["do"])
+                    elif event.type == JOYBUTTONDOWN and behavior == "toggle":
+                        t_args = (self.mode, "buttons", event.button, i)
+                        t_state = self._get_toggle_state(*t_args)
+                        (to_do if not t_state else to_undo).append(data["do"])
+                        self._set_toggle_state(*t_args, not t_state)
                     elif event.type == JOYBUTTONUP and behavior == "momentary":
                         to_undo.append(data["do"])
 
@@ -723,15 +747,23 @@ class InputHandler(object):
                     continue
 
                 if not is_neutral:
-                    for data in self._get_hat_actions(keymap, event.hat, value):
+                    hat_key = self._hat_key(event.hat, value)
+                    actions = self._get_hat_actions(keymap, hat_key)
+                    for i, data in enumerate(actions):
                         behavior = data.get("behavior", "momentary")
                         if behavior in ["momentary", "latch"]:
                             to_do.append(data["do"])
+                        elif behavior == "toggle":
+                            t_args = (self.mode, "hats", hat_key, i)
+                            t_state = self._get_toggle_state(*t_args)
+                            (to_do if not t_state else to_undo).append(data["do"])
+                            self._set_toggle_state(*t_args, not t_state)
 
                 if prev_value:
-                    for data in self._get_hat_actions(keymap, event.hat, prev_value):
+                    hat_key = self._hat_key(event.hat, prev_value)
+                    for data in self._get_hat_actions(keymap, hat_key):
                         behavior = data.get("behavior", "momentary")
-                        if behavior in ["momentary", "latch"]:
+                        if behavior == "momentary":
                             to_undo.append(data["do"])
 
                 self._most_recent_hat_vector[event.hat] = value

@@ -405,7 +405,18 @@ class TestInputHandler(object):
         assert not response["to_do"]
         assert not response["to_undo"]
 
-        # TODO: test toggle behavior
+        mb0[0]["behavior"] = "toggle"
+        response = input_handler.update([ButtonEvent(0)])
+        assert response["to_do"] == [["set", "quality_modifier", 1]]
+        assert not response["to_undo"]
+
+        response = input_handler.update([ButtonEvent(0, is_down=False)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+
+        response = input_handler.update([ButtonEvent(0)])
+        assert response["to_undo"] == [["set", "quality_modifier", 1]]
+        assert not response["to_do"]
 
     def test_clamp_axis_value(self, input_handler):
 
@@ -440,6 +451,10 @@ class TestInputHandler(object):
         from chordcontroller import Vector
         input_handler.joystick_index = 0
 
+        # dpad up
+        mhu = input_handler.mappings[input_handler.mode]["hats"]["0:0:1"]
+        print(mhu)
+
         response = input_handler.update([HatEvent(Vector.UP)])
         assert response["to_do"] == [["play_scale_position", 0]]
         assert not response["to_undo"]
@@ -473,6 +488,26 @@ class TestInputHandler(object):
         response = input_handler.update([HatEvent(Vector.DOWNLEFT)])
         assert response["to_do"] == [["play_scale_position", 5]] 
         assert response["to_undo"] == [["play_scale_position", 6]]
+
+        # test toggle
+        input_handler.update([HatEvent(Vector.NEUTRAL)])
+        mhu[0]["behavior"] = "toggle"
+
+        response = input_handler.update([HatEvent(Vector.UP)])
+        assert response["to_do"] == [["play_scale_position", 0]] 
+        assert not response["to_undo"]
+
+        response = input_handler.update([HatEvent(Vector.NEUTRAL)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
+
+        response = input_handler.update([HatEvent(Vector.UP)])
+        assert response["to_undo"] == [["play_scale_position", 0]] 
+        assert not response["to_do"]
+
+        response = input_handler.update([HatEvent(Vector.NEUTRAL)])
+        assert not response["to_do"]
+        assert not response["to_undo"]
 
 class TestChordController(object):
 
