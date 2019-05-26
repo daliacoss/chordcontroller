@@ -230,8 +230,9 @@ class TestCommandsAndInvoker(object):
         assert cmd.name == "foo"
         assert cmd.x == 1
         assert cmd.y == 2
-        assert cmd.group_by() == ("foo", 1)
+        assert cmd.group_by(False) == ("foo", 1)
         assert cmd.group_by(True) == ("foo", o, 1)
+        assert cmd.group_by() == ("foo", o, 1)
 
         assert o.x == 3
         assert o.y == 4
@@ -242,8 +243,9 @@ class TestCommandsAndInvoker(object):
         FooBar = def_command("foo_bar", "myfoo", ["x", "y"])
         o = MyClass(3, 4)
         cmd = FooBar(o, 1, 2)
-        assert cmd.group_by() == ("foo_bar", 1, 2)
+        assert cmd.group_by(False) == ("foo_bar", 1, 2)
         assert cmd.group_by(True) == ("foo_bar", o, 1, 2)
+        assert cmd.group_by() == ("foo_bar", o, 1, 2)
 
     def test_invoker(self):
         from chordcontroller import SetAttribute, IncrementAttribute, Invoker
@@ -251,49 +253,49 @@ class TestCommandsAndInvoker(object):
         obj = ButtonEvent(-1)
         invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
 
-        cmd_set_button_0 = invoker.add_command(("set", "button", 0))
-        cmd_set_button_1 = invoker.add_command(("set", "button", 1))
-        cmd_set_button_2 = invoker.add_command(("set", "button", 2))
-        cmd_set_button_1000 = invoker.add_command(("set", "button", 1000))
+        cmd_set_button_0 = invoker.add_command(("set", obj, "button", 0))
+        cmd_set_button_1 = invoker.add_command(("set", obj, "button", 1))
+        cmd_set_button_2 = invoker.add_command(("set", obj, "button", 2))
+        cmd_set_button_1000 = invoker.add_command(("set", obj, "button", 1000))
         assert obj.button == -1
 
-        invoker.do(("set", "button", 0))
+        invoker.do(("set", obj, "button", 0))
         assert obj.button == 0
 
-        invoker.do(("set", "button", 1))
+        invoker.do(("set", obj, "button", 1))
         assert obj.button == 1
 
-        invoker.do(("set", "button", 2))
+        invoker.do(("set", obj, "button", 2))
         assert obj.button == 2
-        assert invoker.get_command_stack(("set", "button")) == (
+        assert invoker.get_command_stack(("set", obj, "button")) == (
             cmd_set_button_2, cmd_set_button_1, cmd_set_button_0)
 
         # undoing a command below the top of the undo stack should remove
         # it from the stack, but should have no effect on the button value
         # if there is no revert method
-        assert invoker.undo(("set", "button", 1)) is cmd_set_button_1
+        assert invoker.undo(("set", obj, "button", 1)) is cmd_set_button_1
         assert obj.button == 2
-        assert invoker.get_command_stack(("set", "button")) == (
+        assert invoker.get_command_stack(("set", obj, "button")) == (
             cmd_set_button_2, cmd_set_button_0)
 
         # undoing a command that was never executed should raise exception
         with pytest.raises(Exception):
-            invoker.undo(("set", "button", 1000))
+            invoker.undo(("set", obj, "button", 1000))
         assert obj.button == 2
-        assert invoker.get_command_stack(("set", "button")) == (
+        assert invoker.get_command_stack(("set", obj, "button")) == (
             cmd_set_button_2, cmd_set_button_0)
 
         # undoing the most recent command should change the button value
-        assert invoker.undo(("set", "button", 2)) is cmd_set_button_2
+        assert invoker.undo(("set", obj, "button", 2)) is cmd_set_button_2
         assert obj.button == 0
-        assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
+        assert invoker.get_command_stack(("set", obj, "button")) == (cmd_set_button_0,)
 
         # undoing the only command in the stack should raise exception if
         # the command has no revert method
         with pytest.raises(Exception):
-            invoker.undo(("set", "button", 0))
+            invoker.undo(("set", obj,  obj, "button", 0))
         assert obj.button == 0
-        assert invoker.get_command_stack(("set","button")) == (cmd_set_button_0,)
+        assert invoker.get_command_stack(("set", obj, "button")) == (cmd_set_button_0,)
 
     def test_invoker_stack_limit(self):
 
@@ -302,17 +304,17 @@ class TestCommandsAndInvoker(object):
         obj = ButtonEvent(-1)
         invoker = Invoker(obj, [SetAttribute, IncrementAttribute])
 
-        cmd_set_button_0 = invoker.add_command(("set", "button", 0), stack_limit=2)
-        cmd_set_button_1 = invoker.add_command(("set", "button", 1), stack_limit=0)
-        cmd_set_button_2 = invoker.add_command(("set", "button", 2), stack_limit=2)
-        assert invoker.get_command_stack_limit(("set", "button")) == 2
+        cmd_set_button_0 = invoker.add_command(("set", obj, "button", 0), stack_limit=2)
+        cmd_set_button_1 = invoker.add_command(("set", obj, "button", 1), stack_limit=0)
+        cmd_set_button_2 = invoker.add_command(("set", obj, "button", 2), stack_limit=2)
+        assert invoker.get_command_stack_limit(("set", obj, "button")) == 2
 
-        invoker.do(("set", "button", 0))
-        invoker.do(("set", "button", 1))
-        invoker.do(("set", "button", 2))
+        invoker.do(("set", obj, "button", 0))
+        invoker.do(("set", obj, "button", 1))
+        invoker.do(("set", obj, "button", 2))
         assert obj.button == 2
-        assert len(invoker.get_command_stack(("set", "button"))) == 2
-        invoker.undo(("set", "button", 2))
+        assert len(invoker.get_command_stack(("set", obj, "button"))) == 2
+        invoker.undo(("set", obj, "button", 2))
         assert obj.button == 0
 
 def test_commands_from_input_mapping(mapping):

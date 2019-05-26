@@ -134,7 +134,7 @@ class Command(object):
         """
         raise NotImplementedError
 
-    def group_by(self, include_obj=False):
+    def group_by(self, include_obj=True):
         """
         Return this command object's group_by attribute. This can be used by
         an invoker to determine which undo stack to place the object in.
@@ -166,7 +166,7 @@ def def_command(name, obj_method_name, obj_method_params, param_group_range=None
         def __repr__(self):
             return (self._obj_method_arg.values())
 
-        def group_by(self, include_obj=False):
+        def group_by(self, include_obj=True):
 
             all_values = tuple(self._obj_method_arg.values())
             rest = []
@@ -191,7 +191,7 @@ class SetAttribute(Command):
         self._key = key
         self._value = value
 
-    def group_by(self, include_obj=False):
+    def group_by(self, include_obj=True):
         if include_obj:
             rest = (self._obj, self._key)
         else:
@@ -222,7 +222,7 @@ class IncrementAttribute(SetAttribute):
     def revert(self):
         setattr(self._obj, self._key, getattr(self._obj, self._key) - self._value)
 
-    def group_by(self, include_obj=False):
+    def group_by(self, include_obj=True):
 
         rest = (self._key, self._value)
         if include_obj:
@@ -247,7 +247,7 @@ class PlayScalePosition(Command):
     def execute(self):
         self._obj.play_scale_position(self._position)
 
-    def group_by(self, include_obj=False):
+    def group_by(self, include_obj=True):
         if include_obj:
             return (self.name, self._obj)
         else:
@@ -300,7 +300,7 @@ class Invoker(object):
         cmd_name = cmd[0]
         cmd_arg = cmd[1:]
         cmd_class = self.get_command_class(cmd_name)
-        command = cmd_class(self._obj, *cmd_arg)
+        command = cmd_class(*cmd_arg)
 
         self._commands[cmd] = command
         self._command_stacks.setdefault(command.group_by(), tuple())
@@ -575,6 +575,7 @@ class ChordController(object):
         is_fallback_needed = set()
         for k_mode, mode in input_handler.mappings.items():
             for do in commands_from_input_mapping(mode):
+                do = [do[0], self.instrument, *do[1:]]
                 cmd = self.invoker.add_command(do)
 
                 if (
@@ -588,18 +589,19 @@ class ChordController(object):
         # stack. we will create a command based on the initial value of the
         # attribute to set, then run that command immediately
         for x in is_fallback_needed:
-            fallback_arg = (x[0], x[1], (getattr(self.instrument, x[1], None)))
+            fallback_arg = (*x, getattr(self.instrument, x[2], None))
             self.invoker.add_command(fallback_arg)
             self.invoker.do(fallback_arg)
-
 
     def update(self, events):
 
         response = self.input_handler.update(events)
-
+        insert = lambda l, index, value: (*l[:index], value, *l[index:])
         for action in response["to_undo"]:
+            action = insert(action, 1, self.instrument)
             self.invoker.undo(action)
         for action in response["to_do"]:
+            action = insert(action, 1, self.instrument)
             self.invoker.do(action)
 
 def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):
