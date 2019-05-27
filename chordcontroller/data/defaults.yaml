@@ -45,7 +45,7 @@ hat_calibration:
         easy_diagonals: true
 
 mappings:
-    mode_default:
+    default:
         hats:
             *HAT_DPAD_UP:
                 - do: [play_scale_position, 0]
@@ -95,7 +95,7 @@ mappings:
                       - .4
                       - .9
                       - 1
-    mode_change_octave:
+    change_octave:
         master_button: *BUTTON_START
         master_behavior: momentary
         hats:
@@ -105,7 +105,7 @@ mappings:
             *HAT_DPAD_LEFT:
                 - do: [dec, octave, 1 ]
                   behavior: latch
-    mode_change_harmony:
+    change_harmony:
         master_button: *BUTTON_BACK
         master_behavior: momentary
         buttons:
@@ -118,9 +118,9 @@ mappings:
             *BUTTON_Y:
                 - do: [set, harmony, 2] # triad
                   behavior: latch
-    mode_change_bass:
+    change_bass:
         master_button: *BUTTON_LTHUMB
         master_behavior: momentary
-    mode_change_tonic:
+    change_tonic:
         master_button: *BUTTON_RTHUMB
         master_behavior: momentary

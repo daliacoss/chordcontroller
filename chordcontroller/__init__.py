@@ -256,6 +256,13 @@ class PlayScalePosition(Command):
     def revert(self):
         self._obj.release()
 
+class SetMode(SetAttribute):
+
+    name = "mode"
+
+    def __init__(self, obj, mode_name):
+        super().__init__(obj, "mode", mode_name)
+
 SendCC = def_command("send_cc", "send_cc", ["byte1", "byte2"])
 
 class Invoker(object):
@@ -555,7 +562,12 @@ def commands_from_input_mapping(mapping):
 class ChordController(object):
 
     _default_cmd_classes = (
-        SetAttribute, IncrementAttribute, DecrementAttribute, SendCC, PlayScalePosition
+        SetAttribute,
+        IncrementAttribute,
+        DecrementAttribute,
+        SendCC,
+        PlayScalePosition,
+        SetMode
     )
 
     def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
@@ -575,7 +587,8 @@ class ChordController(object):
         is_fallback_needed = set()
         for k_mode, mode in input_handler.mappings.items():
             for do in commands_from_input_mapping(mode):
-                do = [do[0], self.instrument, *do[1:]]
+                obj = self.input_handler if do[0] == "mode" else self.instrument
+                do = [do[0], obj, *do[1:]]
                 cmd = self.invoker.add_command(do)
 
                 if (
@@ -655,7 +668,7 @@ class InputHandler(object):
         self.axis_calibration = config["axis_calibration"]
         self.mappings = config["mappings"]
         self.hat_calibration = config["hat_calibration"]
-        self.mode = "mode_default"
+        self.mode = "default"
 
         self._uncalibrated_axes = set()
         for k, settings in self.axis_calibration.items():
@@ -715,22 +728,31 @@ class InputHandler(object):
                     continue
 
             keymap = self.mappings[self.mode]
-            
+ 
             if event.type in [JOYBUTTONDOWN, JOYBUTTONUP]:
 
                 actions = keymap.get("buttons", {}).get(event.button, [])
 
                 for i, data in enumerate(actions):
                     behavior = data.get("behavior", "momentary")
-                    if event.type == JOYBUTTONDOWN and behavior in ["momentary", "latch"]:
+                    if behavior == "momentary":
+                        if event.type == JOYBUTTONDOWN:
+                            to_do.append(data["do"])
+                        else:
+                            to_undo.append(data["do"])
+                        continue
+                    
+                    #action_dir = JOYBUTTONUP if data.get("on_up") else JOYBUTTONDOWN
+                    action_dir = JOYBUTTONDOWN
+                    if action_dir != event.type:
+                        continue
+                    elif behavior == "latch":
                         to_do.append(data["do"])
-                    elif event.type == JOYBUTTONDOWN and behavior == "toggle":
+                    elif behavior == "toggle":
                         t_args = (self.mode, "buttons", event.button, i)
                         t_state = self._get_toggle_state(*t_args)
                         (to_do if not t_state else to_undo).append(data["do"])
                         self._set_toggle_state(*t_args, not t_state)
-                    elif event.type == JOYBUTTONUP and behavior == "momentary":
-                        to_undo.append(data["do"])
 
             elif event.type == JOYHATMOTION:
 
