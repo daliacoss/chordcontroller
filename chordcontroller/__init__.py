@@ -589,10 +589,11 @@ class ChordController(object):
             for do in commands_from_input_mapping(mode):
                 obj = self.input_handler if do[0] == "mode" else self.instrument
                 do = [do[0], obj, *do[1:]]
-                cmd = self.invoker.add_command(do)
+                cmd = self.invoker.add_command(do, stack_limit=20)
 
                 if (
-                    issubclass(cmd.__class__, SetAttribute) and
+                    type(cmd) == SetAttribute and
+                    #issubclass(cmd.__class__, SetAttribute) and
                     not cmd.revert and
                     (cmd.group_by(), tuple()) in self.invoker.command_stacks
                 ):
@@ -603,7 +604,7 @@ class ChordController(object):
         # attribute to set, then run that command immediately
         for x in is_fallback_needed:
             fallback_arg = (*x, getattr(self.instrument, x[2], None))
-            self.invoker.add_command(fallback_arg)
+            self.invoker.add_command(fallback_arg, stack_limit=20)
             self.invoker.do(fallback_arg)
 
     def update(self, events):
@@ -611,10 +612,12 @@ class ChordController(object):
         response = self.input_handler.update(events)
         insert = lambda l, index, value: (*l[:index], value, *l[index:])
         for action in response["to_undo"]:
-            action = insert(action, 1, self.instrument)
+            obj = self.input_handler if action[0] == "mode" else self.instrument
+            action = insert(action, 1, obj)
             self.invoker.undo(action)
         for action in response["to_do"]:
-            action = insert(action, 1, self.instrument)
+            obj = self.input_handler if action[0] == "mode" else self.instrument
+            action = insert(action, 1, obj)
             self.invoker.do(action)
 
 def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):

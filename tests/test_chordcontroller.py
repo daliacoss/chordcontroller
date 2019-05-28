@@ -542,7 +542,7 @@ class TestChordController(object):
         chord_controller = ChordController(input_handler, instrument)
         assert chord_controller.input_handler.joystick_index == j
 
-    def test_update(self, input_handler, instrument, input_sequence):
+    def test_default_mode_update(self, input_handler, instrument, input_sequence):
         from chordcontroller import ChordController
 
         chord_controller = ChordController(input_handler, instrument)
@@ -556,4 +556,31 @@ class TestChordController(object):
             else:
                 chord_controller.update([d["input_event"]])
                 assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
+
+    def test_other_modes(self, input_handler, instrument):
+        from chordcontroller import ChordController
+
+        chord_controller = ChordController(input_handler, instrument)
+        chord_controller.input_handler.joystick_index = 0
+
+        # start button
+        assert instrument.octave == 5
+        response = chord_controller.update([ButtonEvent(7)])
+        assert input_handler.mode == "change_octave"
+        assert instrument.octave == 5
+
+        response = chord_controller.update([HatEvent((1,0))])
+        assert instrument.octave == 6
+
+        response = chord_controller.update([HatEvent((0,0))])
+        assert instrument.octave == 6
+
+        response = chord_controller.update([HatEvent((-1,0))])
+        assert instrument.octave == 5
+
+        response = chord_controller.update([HatEvent((0,0))])
+        assert instrument.octave == 5
+
+        response = chord_controller.update([ButtonEvent(7, False)])
+        assert input_handler.mode == "default"
 

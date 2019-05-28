@@ -65,6 +65,12 @@ mappings:
             *HAT_DPAD_UPLEFT:
                 - do: [play_scale_position, 6,]
         buttons:
+            *BUTTON_START:
+                - do: [mode, "change_octave"]
+                  behavior: latch
+            *BUTTON_BACK:
+                - do: [mode, "change_harmony"]
+                  behavior: latch
             *BUTTON_RB:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary #default
@@ -96,8 +102,11 @@ mappings:
                       - .9
                       - 1
     change_octave:
-        master_button: *BUTTON_START
-        master_behavior: momentary
+        buttons:
+            *BUTTON_START: &BackToDefault
+                - do: [mode, "default"]
+                  behavior: latch
+                  on_release: true
         hats:
             *HAT_DPAD_RIGHT:
                 - do: [inc, octave, 1]
@@ -106,9 +115,8 @@ mappings:
                 - do: [dec, octave, 1 ]
                   behavior: latch
     change_harmony:
-        master_button: *BUTTON_BACK
-        master_behavior: momentary
         buttons:
+            *BUTTON_BACK: *BackToDefault
             *BUTTON_A:
                 - do: [set, harmony, 0] # single voice
                   behavior: latch
@@ -119,8 +127,9 @@ mappings:
                 - do: [set, harmony, 2] # triad
                   behavior: latch
     change_bass:
-        master_button: *BUTTON_LTHUMB
-        master_behavior: momentary
+        buttons:
+            *BUTTON_LTHUMB: *BackToDefault
     change_tonic:
-        master_button: *BUTTON_RTHUMB
-        master_behavior: momentary
+        buttons:
+            *BUTTON_RTHUMB: *BackToDefault
+
