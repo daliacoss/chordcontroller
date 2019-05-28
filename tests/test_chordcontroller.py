@@ -306,6 +306,7 @@ class TestCommandsAndInvoker(object):
 
         cmd_set_button_0 = invoker.add_command(("set", obj, "button", 0), stack_limit=2)
         cmd_set_button_1 = invoker.add_command(("set", obj, "button", 1), stack_limit=0)
+        assert invoker.get_command_stack_limit(("set", obj, "button")) == 0
         cmd_set_button_2 = invoker.add_command(("set", obj, "button", 2), stack_limit=2)
         assert invoker.get_command_stack_limit(("set", obj, "button")) == 2
 
