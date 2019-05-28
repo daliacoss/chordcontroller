@@ -289,7 +289,7 @@ class TestCommandsAndInvoker(object):
         assert invoker.undo(("set", obj, "button", 2)) is cmd_set_button_2
         assert obj.button == 0
         assert invoker.get_command_stack(("set", obj, "button")) == (cmd_set_button_0,)
-
+#
         # undoing the only command in the stack should raise exception if
         # the command has no revert method
         with pytest.raises(Exception):
@@ -407,7 +407,20 @@ class TestInputHandler(object):
         assert not response["to_do"]
         assert not response["to_undo"]
 
+        # test latch with on_release (only trigger when button is released)
+
+        mb0[0]["on_release"] = True
+        response = input_handler.update([ButtonEvent(0)])
+        assert not (response["to_do"] or response["to_undo"])
+
+        response = input_handler.update([ButtonEvent(0, is_down=False)])
+        assert response["to_do"] == [["set", "quality_modifier", 1]]
+        assert not response["to_undo"]
+
+        # test toggle behavior
+
         mb0[0]["behavior"] = "toggle"
+        mb0[0]["on_release"] = False 
         response = input_handler.update([ButtonEvent(0)])
         assert response["to_do"] == [["set", "quality_modifier", 1]]
         assert not response["to_undo"]
@@ -455,7 +468,6 @@ class TestInputHandler(object):
 
         # dpad up
         mhu = input_handler.mappings[input_handler.mode]["hats"]["0:0:1"]
-        print(mhu)
 
         response = input_handler.update([HatEvent(Vector.UP)])
         assert response["to_do"] == [["play_scale_position", 0]]
@@ -509,6 +521,16 @@ class TestInputHandler(object):
 
         response = input_handler.update([HatEvent(Vector.NEUTRAL)])
         assert not response["to_do"]
+        assert not response["to_undo"]
+
+        # test on_release
+        mhu[0]["on_release"] = True
+        response = input_handler.update([HatEvent(Vector.UP)])
+        assert not response["to_undo"]
+        assert not response["to_do"]
+
+        response = input_handler.update([HatEvent(Vector.NEUTRAL)])
+        assert response["to_do"] == [["play_scale_position", 0]] 
         assert not response["to_undo"]
 
 class TestChordController(object):

@@ -705,6 +705,12 @@ class InputHandler(object):
             "{}.{}.{}.{}".format(mode, input_type, input_key, action_index)
         ] = value
 
+    def _handle_toggle(self, t_args, to_do, to_undo):
+        t_args = (self.mode, *t_args)
+        t_state = self._get_toggle_state(*t_args)
+        self._set_toggle_state(*t_args, not t_state)
+        return (to_do if not t_state else to_undo)
+
     def update(self, events):
 
         to_do = []
@@ -742,17 +748,13 @@ class InputHandler(object):
                             to_undo.append(data["do"])
                         continue
                     
-                    #action_dir = JOYBUTTONUP if data.get("on_up") else JOYBUTTONDOWN
-                    action_dir = JOYBUTTONDOWN
+                    action_dir = JOYBUTTONUP if data.get("on_release") else JOYBUTTONDOWN
                     if action_dir != event.type:
                         continue
                     elif behavior == "latch":
                         to_do.append(data["do"])
                     elif behavior == "toggle":
-                        t_args = (self.mode, "buttons", event.button, i)
-                        t_state = self._get_toggle_state(*t_args)
-                        (to_do if not t_state else to_undo).append(data["do"])
-                        self._set_toggle_state(*t_args, not t_state)
+                        self._handle_toggle(("buttons", event.button, i), to_do, to_undo).append(data["do"])
 
             elif event.type == JOYHATMOTION:
 
@@ -770,27 +772,41 @@ class InputHandler(object):
                 ):
                     continue
 
-                if not is_neutral:
-                    hat_key = self._hat_key(event.hat, value)
-                    actions = self._get_hat_actions(keymap, hat_key)
-                    for i, data in enumerate(actions):
-                        behavior = data.get("behavior", "momentary")
-                        if behavior in ["momentary", "latch"]:
-                            to_do.append(data["do"])
-                        elif behavior == "toggle":
-                            t_args = (self.mode, "hats", hat_key, i)
-                            t_state = self._get_toggle_state(*t_args)
-                            (to_do if not t_state else to_undo).append(data["do"])
-                            self._set_toggle_state(*t_args, not t_state)
+                # respond to direction we just moved from
 
                 if prev_value:
                     hat_key = self._hat_key(event.hat, prev_value)
-                    for data in self._get_hat_actions(keymap, hat_key):
+                    actions = self._get_hat_actions(keymap, hat_key)
+                    for i, data in enumerate(actions):
                         behavior = data.get("behavior", "momentary")
+                        on_release = data.get("on_release")
                         if behavior == "momentary":
                             to_undo.append(data["do"])
+                        elif on_release and (behavior == "latch"):
+                            to_do.append(data["do"])
+                        elif on_release and (behavior == "toggle"):
+                            self._handle_toggle(("hats", hat_key, i), to_do, to_undo).append(data["do"])
 
                 self._most_recent_hat_vector[event.hat] = value
+
+                if is_neutral:
+                    continue
+
+                # respond to direction we just moved to
+
+                hat_key = self._hat_key(event.hat, value)
+                actions = self._get_hat_actions(keymap, hat_key)
+                for i, data in enumerate(actions):
+                    behavior = data.get("behavior", "momentary")
+                    on_release = data.get("on_release")
+                    if behavior == "momentary":
+                        to_do.append(data["do"])
+                    elif behavior == "latch" and not on_release:
+                        to_do.append(data["do"])
+                    elif behavior == "toggle" and not on_release:
+                        self._handle_toggle(
+                            ("hats", hat_key, i), to_do, to_undo
+                        ).append(data["do"])
 
             elif event.type == JOYAXISMOTION:
                 if event.axis in self._uncalibrated_axes:
