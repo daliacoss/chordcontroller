@@ -66,16 +66,16 @@ mappings:
                 - do: [play_scale_position, 6,]
         buttons:
             *BUTTON_START:
-                - do: [mode, "change_octave"]
+                - do: [mode, change_octave]
                   behavior: latch
             *BUTTON_BACK:
-                - do: [mode, "change_harmony"]
+                - do: [mode, change_harmony]
                   behavior: latch
             *BUTTON_LTHUMB:
-                - do: [mode, "change_bass"]
+                - do: [mode, change_bass]
                   behavior: latch
             *BUTTON_RTHUMB:
-                - do: [mode, "change_tonic"]
+                - do: [mode, change_tonic]
                   behavior: latch
             *BUTTON_RB:
                 - do: [set, tonic_offset, -1]
@@ -110,7 +110,7 @@ mappings:
     change_octave:
         buttons:
             *BUTTON_START: &BackToDefault
-                - do: [mode, "default"]
+                - do: [mode, default]
                   behavior: latch
                   on_release: true
         hats:
@@ -151,7 +151,7 @@ mappings:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary
             *BUTTON_RTHUMB:
-                - do: [mode, "default"]
+                - do: [mode, default]
                   behavior: latch
                   on_release: true
                 - do: [commit, tonic]
