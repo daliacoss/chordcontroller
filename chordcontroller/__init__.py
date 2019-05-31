@@ -15,9 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import math, os, shlex
-import pygame, rtmidi, rtmidi.midiutil
+import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple, deque, OrderedDict
 from pygame.locals import *
+from immutables import Map
 
 MAJOR = 0
 MINOR = 1
@@ -52,6 +53,11 @@ HAT_DPAD = 0
 # MIN_THUMB = -1.0
 # MAX_THUMB = 1.0
 
+yaml.add_constructor(
+    "!immutable",
+    lambda l, n: Map(l.construct_mapping(n)),
+    yaml.FullLoader
+)
 
 ScalePositionDatum = namedtuple("ScalePositionDatum", ("root_pitch", "quality"))
 scale_position_data = [
@@ -706,9 +712,10 @@ def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=Tru
 class InputHandler(object):
 
     def __init__(self, config, joystick_index=-1):
-        # self._instrument = instrument
 
-        # self._joysticks = []
+        if not hasattr(config, "get"):
+            config = yaml.full_load(config)
+
         self._joystick_index = joystick_index
         self._most_recent_hat_vector = {0: Vector(0,0)}
 

@@ -68,9 +68,8 @@ def map_constructor(loader, node):
 def input_handler():
     from chordcontroller import InputHandler
     with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
-        yaml.add_constructor("!immutable", map_constructor, yaml.FullLoader)
-        config = yaml.full_load(defaults)
-    return InputHandler(config)
+        ih = InputHandler(defaults)
+    return ih
 
 @pytest.fixture(params=[
     (60, 0, tuple(), 0),
