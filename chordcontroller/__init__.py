@@ -368,8 +368,7 @@ class Invoker(object):
 
         #stack either doesn't exist or is empty
         if not stack:
-            return UndoError("No non-empty undo stack for {}".format(command))
-
+            raise UndoError("No non-empty undo stack for {}".format(command))
 
         if i_cmd < 0 and command:
             for i_cmd, to_undo in enumerate(stack):
@@ -451,28 +450,11 @@ class Instrument(object):
     def playing_notes(self):
         return frozenset(self._playing_note)
 
-    #@property
-    #def tonic_from_sd_and_offset(self):
-        #return self._tonic_from_sd_and_offset
-
-    #@tonic_from_sd_and_offset.setter
-    #def tonic_from_sd_and_offset(self, value):
-        #self._tonic_from_sd_and_offset = value
-        #if value == None:
-            #return
-        #tonic = scale_position_data[value].root_pitch + self.tonic + self.tonic_offset
-        #self.tonic = tonic
-
     def _tonic_from_sd_and_offset(self, value):
 
         if value == None:
             return
         return scale_position_data[value].root_pitch + self.tonic + self.tonic_offset
-    #tonic_from_sd_and_offset = property(
-        #fget=tonic.fget,
-        #fset=set_tonic_from_sd_and_offset,
-        #doc="This property allows setting the tonic using a scale position and the current value of the tonic_offset property."
-    #)
 
     def get_next(self, key):
         return self._next[key]
@@ -494,11 +476,6 @@ class Instrument(object):
     def unset_next(self, key):
         if key in self._next:
             self._next.pop(key)
-
-    #def set_next_tonic_from_scale_position(self, scale_position):
-        #spd = scale_position_data[scale_position]
-        #tonic_offset = self.tonic_offset
-        #self.set_next("tonic", (self.tonic + spd.root_pitch + self.tonic_offset))
 
     def commit(self, key):
 
@@ -676,7 +653,10 @@ class ChordController(object):
         for action in response["to_undo"]:
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)
-            self.invoker.undo(action)
+            try:
+                self.invoker.undo(action)
+            except UndoError:
+                pass
         for action in response["to_do"]:
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)

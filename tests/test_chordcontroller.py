@@ -95,8 +95,8 @@ def chord_root_position(request):
     # press X, then press Y, then release Y, then release X
     (("extension_modifier"), (B(2, True), 1), (B(3, True), 2), (B(3, False), 1), (B(2, False), 0)),
 
-    # press A, then release A, then release A (testing UndoError)
-    ("quality_modifier", (B(0, True), 1), (B(0, False), 0), (B(0, False), UndoError)),
+    # press A, then release A, then release A
+    ("quality_modifier", (B(0, True), 1), (B(0, False), 0), (B(0, False), 0)),
 
     # dpad up, then dpad down, then dpad neutral
     ("playing_notes",
@@ -296,7 +296,7 @@ class TestCommandsAndInvoker(object):
             cmd_set_button_2, cmd_set_button_0)
 
         # undoing a command that was never executed should raise exception
-        with pytest.raises(Exception):
+        with pytest.raises(UndoError):
             invoker.undo(("set", obj, "button", 1000))
         assert obj.button == 2
         assert invoker.get_command_stack(("set", obj, "button")) == (
@@ -309,8 +309,8 @@ class TestCommandsAndInvoker(object):
 #
         # undoing the only command in the stack should raise exception if
         # the command has no revert method
-        with pytest.raises(Exception):
-            invoker.undo(("set", obj,  obj, "button", 0))
+        with pytest.raises(UndoError) as e:
+            invoker.undo(("set", obj, "button", 0))
         assert obj.button == 0
         assert invoker.get_command_stack(("set", obj, "button")) == (cmd_set_button_0,)
 
@@ -629,9 +629,12 @@ class TestChordController(object):
         chord_controller.update([ButtonEvent(BUTTON_RB)])
         chord_controller.update([HatEvent((-1,0))])
         assert instrument.get_next("tonic") == 6
-        chord_controller.update([HatEvent((0,0))])
         chord_controller.update([ButtonEvent(BUTTON_RB, False)])
 
         assert instrument.tonic == 0
         chord_controller.update([ButtonEvent(BUTTON_RTHUMB, False)])
+        response = chord_controller.update([HatEvent((0,0))])
+        assert not response["to_do"]
+        assert response["to_undo"] == [["play_scale_position", 4]]
         assert instrument.tonic == 6
+        assert not instrument.playing_notes
