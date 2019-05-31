@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import math, os, shlex
+import math, os 
 import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple, deque, OrderedDict
 from pygame.locals import *
@@ -31,27 +31,6 @@ MAJOR_NINTH = 14
 BASS_NONE = 0
 BASS_ROOT = 1       # add an extra voice an octave below the root
 BASS_INVERSION = 2  # add an extra voice an octave below the lowest note
-
-BUTTON_A = 0
-BUTTON_B = 1
-BUTTON_X = 2
-BUTTON_Y = 3
-BUTTON_LB = 4
-BUTTON_RB = 5
-BUTTON_BACK = 6
-BUTTON_START = 7
-BUTTON_XBOX = 8
-BUTTON_LTHUMB = 9
-BUTTON_RTHUMB = 10
-AXIS_RTHUMBY = 3
-AXIS_RTRIGGER = 4
-AXIS_LTRIGGER = 5
-HAT_DPAD = 0
-
-# MIN_TRIGGER = -1.0
-# MAX_TRIGGER = 1.0
-# MIN_THUMB = -1.0
-# MAX_THUMB = 1.0
 
 yaml.add_constructor(
     "!immutable",
