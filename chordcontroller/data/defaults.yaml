@@ -71,6 +71,12 @@ mappings:
             *BUTTON_BACK:
                 - do: [mode, "change_harmony"]
                   behavior: latch
+            *BUTTON_LTHUMB:
+                - do: [mode, "change_bass"]
+                  behavior: latch
+            *BUTTON_RTHUMB:
+                - do: [mode, "change_tonic"]
+                  behavior: latch
             *BUTTON_RB:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary #default
@@ -129,7 +135,50 @@ mappings:
     change_bass:
         buttons:
             *BUTTON_LTHUMB: *BackToDefault
+            *BUTTON_A:
+                - do: [set, bass, 0]
+                  behavior: latch
+            *BUTTON_B: &SetBass1
+                - do: [set, bass, 1]
+                  behavior: latch
+            *BUTTON_X: *SetBass1
+            *BUTTON_Y:
+                - do: [set, bass, 2]
+                  behavior: latch
     change_tonic:
         buttons:
-            *BUTTON_RTHUMB: *BackToDefault
-
+            *BUTTON_RB:
+                - do: [set, tonic_offset, -1]
+                  behavior: momentary
+            *BUTTON_RTHUMB:
+                - do: [mode, "default"]
+                  behavior: latch
+                  on_release: true
+                - do: [commit, tonic]
+                  behavior: latch
+                  on_release: true
+        hats:
+            *HAT_DPAD_UP:
+                - do: [set_next, tonic, !immutable {scale_degree: 0, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_DOWN:
+                - do: [set_next, tonic, !immutable {scale_degree: 0, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_DOWNRIGHT:
+                - do: [set_next, tonic, !immutable {scale_degree: 1, calculate_immediately: true},]
+                  behavior: latch
+            *HAT_DPAD_UPRIGHT:
+                - do: [set_next, tonic, !immutable {scale_degree: 2, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_RIGHT:
+                - do: [set_next, tonic, !immutable {scale_degree: 3, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_LEFT:
+                - do: [set_next, tonic, !immutable {scale_degree: 4, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_DOWNLEFT:
+                - do: [set_next, tonic, !immutable {scale_degree: 5, calculate_immediately: true}]
+                  behavior: latch
+            *HAT_DPAD_UPLEFT:
+                - do: [set_next, tonic, !immutable {scale_degree: 6, calculate_immediately: true}]
+                  behavior: latch

@@ -1,9 +1,22 @@
 import pytest, os, pkg_resources, yaml
+from immutables import Map
 from collections import namedtuple
 from pygame.locals import *
 from chordcontroller import UndoError
 
 os.environ["RTMIDI_API"] = "RTMIDI_DUMMY"
+
+BUTTON_A = 0
+BUTTON_B = 1
+BUTTON_X = 2
+BUTTON_Y = 3
+BUTTON_LB = 4
+BUTTON_RB = 5
+BUTTON_BACK = 6
+BUTTON_START = 7
+BUTTON_XBOX = 8
+BUTTON_LTHUMB = 9
+BUTTON_RTHUMB = 10
 
 ############
 # FIXTURES #
@@ -48,10 +61,14 @@ def instrument():
     import chordcontroller
     return chordcontroller.Instrument(octave=5)
 
+def map_constructor(loader, node):
+    return Map(loader.construct_mapping(node))
+
 @pytest.fixture
 def input_handler():
     from chordcontroller import InputHandler
     with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
+        yaml.add_constructor("!immutable", map_constructor, yaml.FullLoader)
         config = yaml.full_load(defaults)
     return InputHandler(config)
 
@@ -558,7 +575,7 @@ class TestChordController(object):
                 chord_controller.update([d["input_event"]])
                 assert getattr(chord_controller.instrument, d["expected_attr"]) == d["expected_value"]
 
-    def test_other_modes(self, input_handler, instrument):
+    def test_change_octave_mode(self, input_handler, instrument):
         from chordcontroller import ChordController
 
         chord_controller = ChordController(input_handler, instrument)
@@ -582,6 +599,39 @@ class TestChordController(object):
         response = chord_controller.update([HatEvent((0,0))])
         assert instrument.octave == 5
 
+        response = chord_controller.update([ButtonEvent(0)])
+        assert not response["to_do"]
+
         response = chord_controller.update([ButtonEvent(7, False)])
         assert input_handler.mode == "default"
 
+    def test_change_tonic_mode(self, instrument, input_handler):
+        from chordcontroller import ChordController
+
+        chord_controller = ChordController(input_handler, instrument)
+        chord_controller.input_handler.joystick_index = 0
+
+        chord_controller.update([ButtonEvent(BUTTON_RTHUMB)])
+        assert input_handler.mode == "change_tonic"
+
+        chord_controller.update([HatEvent((1,0))])
+        chord_controller.update([HatEvent((0,0))])
+        assert instrument.get_next("tonic") == 5
+
+        chord_controller.update([HatEvent((-1,0))])
+        assert instrument.get_next("tonic") == 7 
+        chord_controller.update([ButtonEvent(BUTTON_RB)])
+        assert instrument.tonic_offset == -1
+        assert instrument.get_next("tonic") == 7 
+        chord_controller.update([HatEvent((0,0))])
+        chord_controller.update([ButtonEvent(BUTTON_RB, False)])
+
+        chord_controller.update([ButtonEvent(BUTTON_RB)])
+        chord_controller.update([HatEvent((-1,0))])
+        assert instrument.get_next("tonic") == 6
+        chord_controller.update([HatEvent((0,0))])
+        chord_controller.update([ButtonEvent(BUTTON_RB, False)])
+
+        assert instrument.tonic == 0
+        chord_controller.update([ButtonEvent(BUTTON_RTHUMB, False)])
+        assert instrument.tonic == 6

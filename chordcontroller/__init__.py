@@ -29,7 +29,7 @@ MAJOR_NINTH = 14
 
 BASS_NONE = 0
 BASS_ROOT = 1       # add an extra voice an octave below the root
-BASS_INVERSION = 2  # add an extra voice an octave below the loLEFT note
+BASS_INVERSION = 2  # add an extra voice an octave below the lowest note
 
 BUTTON_A = 0
 BUTTON_B = 1
@@ -153,9 +153,10 @@ def def_command(name, obj_method_name, obj_method_params, param_group_range=None
 
             self._obj_method_name = obj_method_name
             self._obj_method_arg = OrderedDict()
+            num_params = len(obj_method_params)
+            self._param_group_range = param_group_range or range(num_params)
             for i, k in enumerate(obj_method_params):
                 self._obj_method_arg[k] = arg[i]
-            self._param_group_range = param_group_range or range(i + 1)
 
         def execute(self):
             getattr(self._obj, self._obj_method_name)(**self._obj_method_arg)
@@ -212,6 +213,13 @@ class SetAttribute(Command):
     def execute(self):
         setattr(self._obj, self._key, self._value)
 
+class SetNextAttribute(SetAttribute):
+
+    name = "set_next"
+
+    def execute(self):
+        self._obj.set_next(self._key, self._value)
+
 class IncrementAttribute(SetAttribute):
 
     name = "inc"
@@ -264,6 +272,11 @@ class SetMode(SetAttribute):
         super().__init__(obj, "mode", mode_name)
 
 SendCC = def_command("send_cc", "send_cc", ["byte1", "byte2"])
+CommitAttribute = def_command("commit", "commit", ["key"])
+def _revert(self):
+    pass
+CommitAttribute.revert = _revert
+del _revert
 
 class Invoker(object):
 
@@ -428,19 +441,64 @@ class Instrument(object):
 
     @tonic.setter
     def tonic(self, t):
+        try:
+            t = int(t)
+        except TypeError:
+            t = self._tonic_from_sd_and_offset(t["scale_degree"])
         self._tonic = t % 12
-    
+ 
     @property
     def playing_notes(self):
         return frozenset(self._playing_note)
 
+    #@property
+    #def tonic_from_sd_and_offset(self):
+        #return self._tonic_from_sd_and_offset
+
+    #@tonic_from_sd_and_offset.setter
+    #def tonic_from_sd_and_offset(self, value):
+        #self._tonic_from_sd_and_offset = value
+        #if value == None:
+            #return
+        #tonic = scale_position_data[value].root_pitch + self.tonic + self.tonic_offset
+        #self.tonic = tonic
+
+    def _tonic_from_sd_and_offset(self, value):
+
+        if value == None:
+            return
+        return scale_position_data[value].root_pitch + self.tonic + self.tonic_offset
+    #tonic_from_sd_and_offset = property(
+        #fget=tonic.fget,
+        #fset=set_tonic_from_sd_and_offset,
+        #doc="This property allows setting the tonic using a scale position and the current value of the tonic_offset property."
+    #)
+
+    def get_next(self, key):
+        return self._next[key]
+
     def set_next(self, key, value):
+ 
+        # TODO: allow None as a value
+        if not value:
+            self.unset_next(value)
+            return
+        if key == "tonic":
+            try:
+                value = int(value)
+            except TypeError:
+                if value.get("calculate_immediately"):
+                    value = self._tonic_from_sd_and_offset(value["scale_degree"])
         self._next[key] = value
 
-    def set_next_tonic_from_scale_position(self, scale_position):
-        spd = scale_position_data[scale_position]
-        tonic_offset = self.tonic_offset
-        self.set_next("tonic", (self.tonic + spd.root_pitch + self.tonic_offset))
+    def unset_next(self, key):
+        if key in self._next:
+            self._next.pop(key)
+
+    #def set_next_tonic_from_scale_position(self, scale_position):
+        #spd = scale_position_data[scale_position]
+        #tonic_offset = self.tonic_offset
+        #self.set_next("tonic", (self.tonic + spd.root_pitch + self.tonic_offset))
 
     def commit(self, key):
 
@@ -563,11 +621,13 @@ class ChordController(object):
 
     _default_cmd_classes = (
         SetAttribute,
+        SetNextAttribute,
+        CommitAttribute,
         IncrementAttribute,
         DecrementAttribute,
         SendCC,
         PlayScalePosition,
-        SetMode
+        SetMode,
     )
 
     def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
@@ -592,7 +652,7 @@ class ChordController(object):
                 cmd = self.invoker.add_command(do, stack_limit=20)
 
                 if (
-                    type(cmd) == SetAttribute and
+                    type(cmd) in [SetAttribute, SetNextAttribute] and
                     #issubclass(cmd.__class__, SetAttribute) and
                     not cmd.revert and
                     (cmd.group_by(), tuple()) in self.invoker.command_stacks
@@ -603,6 +663,7 @@ class ChordController(object):
         # stack. we will create a command based on the initial value of the
         # attribute to set, then run that command immediately
         for x in is_fallback_needed:
+            # using None as fallback for getattr allows SetNextAttribute to work
             fallback_arg = (*x, getattr(self.instrument, x[2], None))
             self.invoker.add_command(fallback_arg, stack_limit=20)
             self.invoker.do(fallback_arg)
@@ -611,6 +672,7 @@ class ChordController(object):
 
         response = self.input_handler.update(events)
         insert = lambda l, index, value: (*l[:index], value, *l[index:])
+
         for action in response["to_undo"]:
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)
@@ -619,6 +681,8 @@ class ChordController(object):
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)
             self.invoker.do(action)
+
+        return response
 
 def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):
     """
