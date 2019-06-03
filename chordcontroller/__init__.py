@@ -478,7 +478,7 @@ class Instrument(object):
         quality_modifier = self.quality_modifier
         extension_modifier = self.extension_modifier
 
-        root = self.tonic + (self.octave * 12) + spd.root_pitch - tonic_offset
+        root = self.tonic + (self.octave * 12) + spd.root_pitch + tonic_offset
 
         if self.quality_modifier == 1:
             quality = not spd.quality
@@ -497,7 +497,7 @@ class Instrument(object):
         else:
             extensions = tuple()
 
-        chord = Chord(root, quality, extensions=extensions, voicing=modifiers.get("voicing", 0))
+        chord = Chord(root, quality, extensions=extensions, voicing=self.voicing)
         if self.bass == BASS_ROOT:
             chord += (root - 12,)
         elif self.bass == BASS_INVERSION:
@@ -845,7 +845,7 @@ class InputHandler(object):
                 if event.axis in self._uncalibrated_axes:
                     self._uncalibrated_axes.discard(event.axis)
 
-                for data in keymap.get("axes", {}).get(event.axis):
+                for data in keymap.get("axes", {}).get(event.axis, []):
                     data = dict(data)
                     do = data.pop("do")
                     processed_value = value_in_range(self.clamp_axis_value(event.axis, event.value), **data)
