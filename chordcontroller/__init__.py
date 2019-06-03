@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import math, os 
 import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple, deque, OrderedDict
 from pygame.locals import *
@@ -68,7 +67,7 @@ def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
 
     inversion = tuple()
     for i, v in enumerate(chord):
-        k = i + voicing
+        k = i + int(voicing)
         octave = k // len(chord)
         inversion += (chord[k % len(chord)] + octave * 12,)
 
@@ -104,6 +103,24 @@ Vector.DOWNLEFT = Vector(-1,-1)
 Vector.UPRIGHT = Vector(1,1)
 Vector.UPLEFT = Vector(-1,1)
 Vector.NEUTRAL = Vector(0,0)
+
+class Event(object):
+    def __init__(self, _type, **params):
+        self.__dict__ = params
+        self.type = _type
+
+class ButtonEvent(Event):
+    def __init__(self, button, is_down=True, joy=0):
+        super().__init__(_type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
+
+class HatEvent(Event):
+    def __init__(self, value, hat=0, joy=0):
+        super().__init__(value=value, _type=JOYHATMOTION, hat=hat, joy=joy)
+
+class AxisEvent(Event):
+    def __init__(self, value, axis, joy=0):
+        super().__init__(value=value, _type=JOYAXISMOTION, axis=axis, joy=joy)
+
 
 class UndoError(Exception):
     pass
@@ -323,9 +340,16 @@ class Invoker(object):
     def get_command_stack_limit(self, stack_id):
         return self._command_stack_limits[stack_id]
 
-    def do(self, cmd):
+    def do(self, cmd, autoregister_if_unknown=False, stack_limit_if_unknown=0):
+
         cmd = tuple(cmd)
-        command = self._commands[cmd]
+        command = self._commands.get(cmd)
+        if not command:
+            if autoregister_if_unknown:
+                command = self.add_command(cmd, stack_limit_if_unknown)
+            else:
+                raise KeyError("{} is not a registered command".format(cmd))
+
         stack_id = command.group_by()
         stack_limit = self._command_stack_limits.get(stack_id, 0)
         stack = self._command_stacks[stack_id]
@@ -592,18 +616,23 @@ class ChordController(object):
         SetMode,
     )
 
-    def __init__(self, input_handler, instrument=None, extra_cmd_classes=tuple()):
+    def __init__(self, input_handler, instrument=None, **params):
         """
         input_handler can be either instance of InputHandler, or a map of config
         settings to pass to a new InputHandler instance
         """
+
         if issubclass(type(input_handler), InputHandler):
             self.input_handler = input_handler
         else:
             self.input_handler = InputHandler(input_handler)
 
+        self.allow_unknown_commands = params.get("allow_unknown_commands", True)
         self.instrument = instrument or Instrument()
-        self.invoker = Invoker(self.instrument, (*self._default_cmd_classes, *extra_cmd_classes))
+        self.invoker = Invoker(
+            self.instrument,
+            (*self._default_cmd_classes, *params.get("extra_cmd_classes", []))
+        )
 
         # add commands to invoker
         is_fallback_needed = set()
@@ -630,24 +659,27 @@ class ChordController(object):
             self.invoker.add_command(fallback_arg, stack_limit=20)
             self.invoker.do(fallback_arg)
 
+        self.execute_actions({"to_do": self.input_handler.startup_commands})
+
     def update(self, events):
 
         response = self.input_handler.update(events)
-        insert = lambda l, index, value: (*l[:index], value, *l[index:])
+        self.execute_actions(response)
+        return response
 
-        for action in response["to_undo"]:
+    def execute_actions(self, response):
+        insert = lambda l, index, value: (*l[:index], value, *l[index:])
+        for action in response.get("to_undo", []):
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)
             try:
                 self.invoker.undo(action)
             except UndoError:
                 pass
-        for action in response["to_do"]:
+        for action in response.get("to_do", []):
             obj = self.input_handler if action[0] == "mode" else self.instrument
             action = insert(action, 1, obj)
-            self.invoker.do(action)
-
-        return response
+            self.invoker.do(action, self.allow_unknown_commands, 20)
 
 def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=True, steps=[]):
     """
@@ -670,7 +702,7 @@ def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=Tru
     """
 
     if percent < 0 or percent > 1:
-        raise ValueError("percent must be between 0 and 1 (inclusive)")
+        raise ValueError("percent must be between 0 and 1 inclusive (got {} instead)".format(percent))
     if curve < 0:
         raise ValueError("curve must be greater than 0")
 
@@ -702,12 +734,10 @@ class InputHandler(object):
         self.mappings = config["mappings"]
         self.hat_calibration = config["hat_calibration"]
         self.mode = "default"
+        self.scheduled_events = []
+        self.startup_commands = config.get("startup", [])
 
         self._uncalibrated_axes = set()
-        for k, settings in self.axis_calibration.items():
-            if settings.get("uncalibrated_at_start"):
-                self._uncalibrated_axes.add(k)
-
         self._toggle_states = {}
 
     @property
@@ -718,9 +748,17 @@ class InputHandler(object):
     def joystick_index(self, v):
         self._joystick_index = v
 
+        #axis_events = []
+        #for k, settings in self.axis_calibration.items():
+            #value_at_start = settings.get("value_at_start")
+            #if value_at_start != None:
+                #axis_events.append(AxisEvent(value=value_at_start, axis=k))
+        #self.scheduled_events += (axis_events)
+
     def clamp_axis_value(self, axis_id, raw_axis_value):
         calibration = self.axis_calibration[axis_id]
-        return (raw_axis_value - calibration["min"]) / (calibration["max"] - calibration["min"])
+        rounded_axis_value = round(raw_axis_value, 3)
+        return (rounded_axis_value - calibration["min"]) / (calibration["max"] - calibration["min"])
 
     def _hat_key(self, hat, value):
         return "{0}:{1}:{2}".format(hat, value.x, value.y)
@@ -749,6 +787,9 @@ class InputHandler(object):
         to_do = []
         to_undo = []
 
+        events += self.scheduled_events
+        self.scheduled_events.clear()
+
         for event in events:
             try:
                 joy_index = getattr(event, "joy")
@@ -762,7 +803,7 @@ class InputHandler(object):
             # do nothing and go to next event
             if joy_index != self._joystick_index:
                 if self._joystick_index < 0 and event.type == JOYBUTTONDOWN:
-                    self._joystick_index = joy_index
+                    self.joystick_index = joy_index
                 else:
                     continue
 

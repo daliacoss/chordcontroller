@@ -29,13 +29,12 @@ constants: # defines the "anchors" that are used later on in this yaml file
 
 axis_calibration:
     *AXIS_RTRIGGER: &TriggerCalibration
-        min: -1.0
+        min: -1.0   # axis value will be rounded to nearest thousandth
         max: 1.0
-        uncalibrated_at_start: true
+        value_at_start: -1.0
     *AXIS_LTRIGGER: *TriggerCalibration
     *AXIS_LTHUMBX: &ThumbCalibration
         <<: *TriggerCalibration
-        uncalibrated_at_start: false
     *AXIS_LTHUMBY: *ThumbCalibration
     *AXIS_RTHUMBX: *ThumbCalibration
     *AXIS_RTHUMBY: *ThumbCalibration
@@ -43,6 +42,9 @@ axis_calibration:
 hat_calibration:
     *HAT_DPAD:
         easy_diagonals: true
+
+startup:
+    - [set, velocity, 0x70]
 
 mappings:
     default:
@@ -82,7 +84,10 @@ mappings:
                   behavior: momentary #default
             *BUTTON_LB:
                 - do: [send_cc, 64, 127] # sustain pedal
-                  undo: [send_cc, 64, 0]
+                  behavior: latch
+                - do: [send_cc, 64, 0]
+                  behavior: latch
+                  on_release: true
             *BUTTON_X:
                 - do: [inc, extension_modifier, 1]
             *BUTTON_Y:
