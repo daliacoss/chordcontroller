@@ -1,7 +1,7 @@
 import pygame, yaml, appdirs
 import os, sys, argparse, pkg_resources
 
-from chordcontroller import InputHandler, Instrument
+from chordcontroller import InputHandler, ChordController
 
 def startup_message(joysticks):
     s = "Available controllers:\n"
@@ -55,39 +55,37 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
-        config = yaml.full_load(defaults)
+    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
+        defaults = f.read()
 
+    abort = False
+    input_handler = None
     try:
         with open(args.config) as stream:
-            config = yaml.full_load(stream)
-
+            input_handler = InputHandler(stream)
     except yaml.YAMLError as e:
         print("Error parsing {0}: {1}".format(os.path.abspath(args.config), e))
         if args.quit_on_parse_failure:
             print("Aborting...")
-            sys.exit(1)
+            abort = True
         else:
             print("Using default settings...")
-
     except IOError:
         print("{} not found. Using default settings...".format(os.path.abspath(args.config)))
-
     finally:
-        input_handler = InputHandler(config)
-        instrument = Instrument()
+        if abort:
+            sys.exit(1)
 
+    if not input_handler:
+        input_handler = InputHandler(defaults)
+    chord_controller = ChordController(input_handler)
     initialize()
 
     try:
         is_controller_selected = False
         clock = pygame.time.Clock()
         while True:
-            response = input_handler.update(pygame.event.get())
-            for td in response["to_do"]:
-                getattr(instrument, td[0])(*td[1:])
-            for tu in response["to_undo"]:
-                instrument.undo(*td)
+            response = chord_controller.update(pygame.event.get())
 
             joystick_index = input_handler.joystick_index
             if joystick_index >= 0 and not is_controller_selected:
