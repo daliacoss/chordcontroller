@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple, deque, OrderedDict
 from pygame.locals import *
@@ -791,6 +792,7 @@ class InputHandler(object):
         self.scheduled_events.clear()
 
         for event in events:
+            logging.info(event)
             try:
                 joy_index = getattr(event, "joy")
             # this event does not spark joy
@@ -893,4 +895,7 @@ class InputHandler(object):
                     if processed_value != None:
                         to_do.append([*do, processed_value])
 
-        return {"to_do": to_do, "to_undo": to_undo}
+        r = {"to_do": to_do, "to_undo": to_undo}
+        #logging.info(r)
+        return r
+

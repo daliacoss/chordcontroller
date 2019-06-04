@@ -1,7 +1,8 @@
-import pygame, yaml, appdirs
-import os, sys, argparse, pkg_resources
+import pygame, appdirs
+import os, sys, argparse, pkg_resources, logging
 
 from chordcontroller import InputHandler, ChordController
+from yaml import YAMLError
 
 def startup_message(joysticks):
     s = "Available controllers:\n"
@@ -46,14 +47,22 @@ def main(argv=None):
         "--config",
         default=os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml"),
         type=str,
-        help="specify a config file in YAML format (default is {})".format(default_user_config)
+        help="config file in YAML format (default is {})".format(default_user_config)
     )
     parser.add_argument(
         "-q", "--quit-on-parse-failure",
         action="store_true",
         help="abort the program if the config file exists but is improperly formatted"
     )
+    parser.add_argument(
+        "--log-level",
+        default="WARNING",
+        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+        type=(lambda x: str(x).upper()),
+        help="minimum severity of logs to record (case-insensitive, default is WARNING)",
+    )
     args = parser.parse_args(argv)
+    logging.basicConfig(level=getattr(logging, args.log_level))
 
     with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
         defaults = f.read()
@@ -63,7 +72,7 @@ def main(argv=None):
     try:
         with open(args.config) as stream:
             input_handler = InputHandler(stream)
-    except yaml.YAMLError as e:
+    except YAMLError as e:
         print("Error parsing {0}: {1}".format(os.path.abspath(args.config), e))
         if args.quit_on_parse_failure:
             print("Aborting...")
