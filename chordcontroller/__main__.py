@@ -117,8 +117,7 @@ def main(argv=None):
         while not list_joysticks():
             input("Please connect a game controller, then press Enter.")
 
-        if getattr(args, "controller"):
-            print(args.controller)
+        if getattr(args, "controller") != None:
             input_handler.joystick_index = args.controller
 
         is_controller_selected = False
@@ -126,17 +125,17 @@ def main(argv=None):
             #TODO: replace clock with Event.wait and threading
             clock.tick(60)
 
+            joystick_index = input_handler.joystick_index
+            if joystick_index >= 0 and not is_controller_selected:
+                print ("Using controller {}".format(joystick_index))
+                is_controller_selected = True
+
             #ev = pygame.event.wait()
             ev = pygame.event.get()
             if not ev:
                 continue
             #response = chord_controller.update([ev])
             response = chord_controller.update(ev)
-
-            joystick_index = input_handler.joystick_index
-            if joystick_index >= 0 and not is_controller_selected:
-                print ("Using controller {}".format(joystick_index))
-                is_controller_selected = True
 
     except KeyboardInterrupt:
         print("\nQuitting...")
