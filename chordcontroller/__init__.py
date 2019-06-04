@@ -51,6 +51,7 @@ scale_position_data = [
 
 NoteOn = lambda pitch, velocity=127, channel=0: (144 + channel, pitch, velocity)
 ModWheel = lambda value, channel=0: (176 + channel, 1, value)
+ControlChange = lambda cn, cv, channel=0: (176 + channel, cn, cv)
 
 def Chord(root, quality=MAJOR, extensions=tuple(), voicing=0):
 
@@ -274,7 +275,7 @@ class SetMode(SetAttribute):
     def __init__(self, obj, mode_name):
         super().__init__(obj, "mode", mode_name)
 
-SendCC = def_command("send_cc", "send_cc", ["byte1", "byte2"])
+SendCC = def_command("send_cc", "send_cc", ["cn", "cv"])
 CommitAttribute = def_command("commit", "commit", ["key"])
 def _revert(self):
     pass
@@ -582,6 +583,9 @@ class Instrument(object):
             self._playing_notes.update(note_values)
         else:
             self._playing_notes.difference_update(note_values)
+
+    def send_cc(self, cn, cv):
+        self._midi_device.send_message(ControlChange(cn,cv))
 
     def send_mod_wheel(self, mod_wheel):
         self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
