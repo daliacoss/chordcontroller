@@ -94,7 +94,11 @@ def main(argv=None):
         is_controller_selected = False
         clock = pygame.time.Clock()
         while True:
-            response = chord_controller.update(pygame.event.get())
+            ev = pygame.event.get()
+            if not ev:
+                continue
+            response = chord_controller.update(ev)
+            logging.info(response)
 
             joystick_index = input_handler.joystick_index
             if joystick_index >= 0 and not is_controller_selected:
@@ -102,7 +106,7 @@ def main(argv=None):
                 is_controller_selected = True
 
             # delay for 1/60 second
-            clock.tick(60)
+            #clock.tick(60)
 
     except KeyboardInterrupt:
         print("\nQuitting...")
