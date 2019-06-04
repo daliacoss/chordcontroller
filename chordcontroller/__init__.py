@@ -578,17 +578,21 @@ class Instrument(object):
 
         for voice in note_values:
             # velocity = 0x70 - round(modifiers.get("velocity", 0)**1.7 * 0x70)
-            self._midi_device.send_message(NoteOn(voice, velocity=velocity))
+            self.send_midi_message(NoteOn(voice, velocity=velocity))
         if velocity:
             self._playing_notes.update(note_values)
         else:
             self._playing_notes.difference_update(note_values)
 
     def send_cc(self, cn, cv):
-        self._midi_device.send_message(ControlChange(cn,cv))
+        self.send_midi_message(ControlChange(cn,cv))
 
     def send_mod_wheel(self, mod_wheel):
-        self._midi_device.send_message(ModWheel(int(mod_wheel * 127)))
+        self.send_midi_message(ModWheel(int(mod_wheel * 127)))
+
+    def send_midi_message(self, message):
+        logging.info("Sending MIDI message: %s", message)
+        self._midi_device.send_message(message)
 
 def commands_from_input_mapping(mapping):
 
@@ -796,7 +800,7 @@ class InputHandler(object):
         self.scheduled_events.clear()
 
         for event in events:
-            logging.info(event)
+            logging.debug("EVENT: %s", event)
             try:
                 joy_index = getattr(event, "joy")
             # this event does not spark joy
@@ -900,6 +904,6 @@ class InputHandler(object):
                         to_do.append([*do, processed_value])
 
         r = {"to_do": to_do, "to_undo": to_undo}
-        #logging.info(r)
+        logging.info(r)
         return r
 

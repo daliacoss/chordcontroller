@@ -98,15 +98,12 @@ def main(argv=None):
             if not ev:
                 continue
             response = chord_controller.update(ev)
-            logging.info(response)
+            #logging.info(response)
 
             joystick_index = input_handler.joystick_index
             if joystick_index >= 0 and not is_controller_selected:
                 print ("Using controller {}".format(joystick_index))
                 is_controller_selected = True
-
-            # delay for 1/60 second
-            #clock.tick(60)
 
     except KeyboardInterrupt:
         print("\nQuitting...")
