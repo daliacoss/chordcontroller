@@ -732,12 +732,13 @@ def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=Tru
 
 class InputHandler(object):
 
-    def __init__(self, config, joystick_index=-1):
+    def __init__(self, config, joystick_index=-1, joystick_autoset=True):
 
         if not hasattr(config, "get"):
             config = yaml.full_load(config)
 
-        self._joystick_index = joystick_index
+        self.joystick_index = joystick_index
+        self.joystick_autoset = joystick_autoset
         self._most_recent_hat_vector = {0: Vector(0,0)}
 
         self.axis_calibration = config["axis_calibration"]
@@ -812,7 +813,7 @@ class InputHandler(object):
             # start tracking the joystick the button was pressed on.
             # else if we're already tracking a joystick other than this one,
             # do nothing and go to next event
-            if joy_index != self._joystick_index:
+            if joy_index != self._joystick_index and self.joystick_autoset:
                 if self._joystick_index < 0 and event.type == JOYBUTTONDOWN:
                     self.joystick_index = joy_index
                 else:

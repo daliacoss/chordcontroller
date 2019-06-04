@@ -11,7 +11,7 @@ def startup_message(joysticks):
     return s + "To continue, press any button on the controller you want to use."
 
 
-def initialize():
+def initialize_pygame():
 
     # set SDL to use the dummy NULL video driver, so it doesn't need a
     # windowing system.
@@ -19,8 +19,12 @@ def initialize():
     pygame.display.init()
     pygame.display.set_mode((1, 1))
 
+def list_joysticks():
+
     # init the joystick control
+    pygame.joystick.quit()
     pygame.joystick.init()
+
     joysticks = []
     for i in range(pygame.joystick.get_count()):
         joy = pygame.joystick.Joystick(i)
@@ -28,10 +32,16 @@ def initialize():
         joysticks.append(joy)
 
     if not joysticks:
-        print("No controllers found. Please connect a game controller before starting.\nAborting...")
-        sys.exit(1)
+        print("No controllers found.")
+    else:
+        s = "Available controllers:\n" + "\n".join(
+            "{0}\t{1}".format(i, j.get_name()) for i, j in enumerate(joysticks)
+        )
+        #for i, joystick in enumerate(joysticks):
+            #s += "{0}\t{1}\n".format(i, joystick.get_name())
+        print(s)
 
-    print(startup_message(joysticks))
+    return joysticks
 
 def main(argv=None):
     """
@@ -42,7 +52,7 @@ def main(argv=None):
 
     default_user_config = os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml")
 
-    parser = argparse.ArgumentParser(description="Turn your Xbox controller into a MIDI keyboard.")
+    parser = argparse.ArgumentParser(prog="chordcontroller", description="Turn your Xbox controller into a MIDI keyboard.")
     parser.add_argument(
         "--config",
         default=os.path.join(appdirs.user_config_dir("chordcontroller"), "ChordController.yaml"),
@@ -55,6 +65,11 @@ def main(argv=None):
         help="abort the program if the config file exists but is improperly formatted"
     )
     parser.add_argument(
+        "-c", "--controller",
+        type=int,
+        help="index of controller to use"
+    )
+    parser.add_argument(
         "--log-level",
         default="WARNING",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
@@ -64,11 +79,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level))
 
-    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
-        defaults = f.read()
+    # load config
 
     abort = False
     input_handler = None
+
+    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
+        defaults = f.read()
+
     try:
         with open(args.config) as stream:
             input_handler = InputHandler(stream)
@@ -88,17 +106,32 @@ def main(argv=None):
     if not input_handler:
         input_handler = InputHandler(defaults)
     chord_controller = ChordController(input_handler)
-    initialize()
 
+    # game loop
     try:
-        is_controller_selected = False
+
+        # initialize
+        initialize_pygame()
         clock = pygame.time.Clock()
+
+        while not list_joysticks():
+            input("Please connect a game controller, then press Enter.")
+
+        if getattr(args, "controller"):
+            print(args.controller)
+            input_handler.joystick_index = args.controller
+
+        is_controller_selected = False
         while True:
+            #TODO: replace clock with Event.wait and threading
+            clock.tick(60)
+
+            #ev = pygame.event.wait()
             ev = pygame.event.get()
             if not ev:
                 continue
+            #response = chord_controller.update([ev])
             response = chord_controller.update(ev)
-            #logging.info(response)
 
             joystick_index = input_handler.joystick_index
             if joystick_index >= 0 and not is_controller_selected:
