@@ -67,7 +67,12 @@ def main(argv=None):
     parser.add_argument(
         "-c", "--controller",
         type=int,
-        help="index of controller to use"
+        help="index of controller to use (overrides -a)"
+    )
+    parser.add_argument(
+        "-a", "--controller-autoset",
+        action="store_true",
+        help="select whichever controller is first to register a button press"
     )
     parser.add_argument(
         "--log-level",
@@ -107,6 +112,10 @@ def main(argv=None):
         input_handler = InputHandler(defaults)
     chord_controller = ChordController(input_handler)
 
+    input_handler.joystick_autoset = args.controller_autoset
+    if args.controller != None:
+        input_handler.joystick_index = args.controller
+
     # game loop
     try:
 
@@ -117,18 +126,21 @@ def main(argv=None):
         while not list_joysticks():
             input("Please connect a game controller, then press Enter.")
 
-        if getattr(args, "controller") != None:
-            input_handler.joystick_index = args.controller
-
         is_controller_selected = False
         while True:
             #TODO: replace clock with Event.wait and threading
             clock.tick(60)
 
             joystick_index = input_handler.joystick_index
-            if joystick_index >= 0 and not is_controller_selected:
-                print ("Using controller {}".format(joystick_index))
-                is_controller_selected = True
+            if joystick_index >= 0:
+                if not is_controller_selected:
+                    print ("Using controller {}".format(joystick_index))
+                    is_controller_selected = True
+            elif not args.controller_autoset:
+                try:
+                    input_handler.joystick_index = int(input("Type the number of the controller you want to use, and press Enter: "))
+                except ValueError:
+                    print("Unable to parse input.")
 
             #ev = pygame.event.wait()
             ev = pygame.event.get()
