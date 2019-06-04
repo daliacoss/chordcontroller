@@ -435,7 +435,8 @@ class Instrument(object):
 
     @octave.setter
     def octave(self, o):
-        self._octave = int(o) % 9
+        o = int(o)
+        self._octave = max(min(o, 8), 0)
 
     @property
     def bass(self):

@@ -344,9 +344,9 @@ def test_commands_from_input_mapping(mapping):
 class TestInstrument(object):
 
     @pytest.mark.parametrize("input_value,expected_value", [
-        (-1, 8),
-        (9, 0),
-        (10, 1),
+        (3, 3),
+        (-1, 0),
+        (9, 8),
         (8.8, 8),
         ("3", 3),
     ])
