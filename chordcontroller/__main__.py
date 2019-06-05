@@ -1,8 +1,9 @@
 import pygame, appdirs
 import os, sys, argparse, pkg_resources, logging
 
-from chordcontroller import InputHandler, ChordController
+from chordcontroller import InputHandler, ChordController, Instrument
 from yaml import YAMLError
+from rtmidi import midiutil
 
 def startup_message(joysticks):
     s = "Available controllers:\n"
@@ -75,6 +76,17 @@ def main(argv=None):
         help="select whichever controller is first to register a button press"
     )
     parser.add_argument(
+        "-p", "--port",
+        default=-1,
+        type=int,
+        help="index of MIDI out port to use",
+    )
+    parser.add_argument(
+        "-l", "--list-ports",
+        action="store_true",
+        help="list all available MIDI ports and exit"
+    )
+    parser.add_argument(
         "--log-level",
         default="WARNING",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
@@ -83,6 +95,12 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level))
+
+    # list ports if asked
+
+    if args.list_ports:
+        midiutil.list_output_ports()
+        sys.exit()
 
     # load config
 
@@ -110,7 +128,7 @@ def main(argv=None):
 
     if not input_handler:
         input_handler = InputHandler(defaults)
-    chord_controller = ChordController(input_handler)
+    chord_controller = ChordController(input_handler, Instrument(port=args.port))
 
     input_handler.joystick_autoset = args.controller_autoset
     if args.controller != None:

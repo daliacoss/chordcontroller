@@ -406,12 +406,16 @@ class Invoker(object):
 
 class Instrument(object):
 
-    def __init__(self, octave=5):
+    def __init__(self, octave=5, port=-1):
 
         self._midi_device = rtmidi.MidiOut(
             name="Chord Controller",
             rtapi=rtmidi.midiutil.get_api_from_environment())
-        self._midi_device.open_virtual_port()
+        if port < 0:
+            self._midi_device.open_virtual_port()
+        else:
+            print(port)
+            self._midi_device.open_port(port)
 
         self._most_recent_chord = tuple()
         self._playing_notes = set()
