@@ -17,6 +17,7 @@
 import logging
 import pygame, rtmidi, rtmidi.midiutil, yaml
 from collections import namedtuple, deque, OrderedDict
+from pkg_resources import resource_stream
 from pygame.locals import *
 from immutables import Map
 
@@ -736,21 +737,27 @@ def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=Tru
 
 class InputHandler(object):
 
-    def __init__(self, config, joystick_index=-1, joystick_autoset=True):
+    def __init__(self, config=None, joystick_index=-1, joystick_autoset=True):
 
-        if not hasattr(config, "get"):
+        with resource_stream("chordcontroller", "data/defaults.yaml") as f:
+            defaults = yaml.full_load(f)
+        
+        if not config:
+            config = {}
+        elif not hasattr(config, "get"):
             config = yaml.full_load(config)
 
         self.joystick_index = joystick_index
         self.joystick_autoset = joystick_autoset
         self._most_recent_hat_vector = {0: Vector(0,0)}
 
-        self.axis_calibration = config["axis_calibration"]
-        self.mappings = config["mappings"]
-        self.hat_calibration = config["hat_calibration"]
+        for k in ["axis_calibration", "hat_calibration", "mappings"]:
+            defaults[k].update(config.get(k, {}))
+            setattr(self, k, defaults[k])
+        self.startup_commands = config.get("startup") or defaults["startup"]
+
         self.mode = "default"
         self.scheduled_events = []
-        self.startup_commands = config.get("startup", [])
 
         self._uncalibrated_axes = set()
         self._toggle_states = {}
@@ -772,7 +779,7 @@ class InputHandler(object):
 
     def clamp_axis_value(self, axis_id, raw_axis_value):
 
-        calibration = self.axis_calibration[axis_id]
+        calibration = self.axis_calibration.get(axis_id, self.axis_calibration["default"])
         min_value = calibration["min"]
         max_value = calibration["max"]
         rounded_axis_value = round(raw_axis_value, 3)
@@ -856,12 +863,13 @@ class InputHandler(object):
                 prev_value = self._most_recent_hat_vector.get(event.hat)
                 value = Vector(*event.value)
                 is_neutral = (value == Vector.NEUTRAL)
+                hat_calibration = self.hat_calibration.get(event.hat, self.hat_calibration["default"])
 
                 # easy diagonals: if the most recent dpad event was a diagonal
                 # press, ignore presses in any of the adjacent cardinal directions
                 # (prevents accidentally playing the wrong chord)
                 if (
-                    self.hat_calibration.get(event.hat, {}).get("easy_diagonals")
+                    hat_calibration.get("easy_diagonals")
                     and prev_value.is_diagonal()
                     and prev_value.is_adjacent_to(value) 
                 ):

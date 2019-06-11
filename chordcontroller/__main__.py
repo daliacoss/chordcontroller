@@ -107,8 +107,8 @@ def main(argv=None):
     abort = False
     input_handler = None
 
-    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
-        defaults = f.read()
+    #with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as f:
+        #defaults = f.read()
 
     try:
         with open(args.config) as stream:
@@ -127,7 +127,7 @@ def main(argv=None):
             sys.exit(1)
 
     if not input_handler:
-        input_handler = InputHandler(defaults)
+        input_handler = InputHandler()
     chord_controller = ChordController(input_handler, Instrument(port=args.port))
 
     input_handler.joystick_autoset = args.controller_autoset

@@ -67,8 +67,8 @@ def map_constructor(loader, node):
 @pytest.fixture
 def input_handler():
     from chordcontroller import InputHandler
-    with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
-        ih = InputHandler(defaults)
+    #with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
+    ih = InputHandler()
     return ih
 
 @pytest.fixture(params=[
@@ -514,7 +514,8 @@ class TestInputHandler(object):
         assert response["to_undo"] == [["play_scale_position", 4]]
 
         # test easy diagonals
-        assert input_handler.hat_calibration[0]["easy_diagonals"]
+        assert input_handler.hat_calibration.get(0) == None
+        assert input_handler.hat_calibration["default"]["easy_diagonals"]
         input_handler.update([HatEvent(Vector.UP)])
         response = input_handler.update([HatEvent(Vector.UPLEFT)])
         assert response["to_do"] == [["play_scale_position", 6]]

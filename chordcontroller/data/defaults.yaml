@@ -28,6 +28,10 @@ constants: # defines the "anchors" that are used later on in this yaml file
     - &AXIS_LTRIGGER 5
 
 axis_calibration:
+    default:
+        min: -1.0
+        max: 1.0
+        value_at_start: 0
     *AXIS_RTRIGGER: &TriggerCalibration
         min: -1.0   # axis value will be rounded to nearest thousandth
         max: 1.0
@@ -41,7 +45,7 @@ axis_calibration:
     *AXIS_RTHUMBY: *ThumbCalibration
 
 hat_calibration:
-    *HAT_DPAD:
+    default:
         easy_diagonals: true
 
 startup:
