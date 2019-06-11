@@ -35,6 +35,7 @@ axis_calibration:
     *AXIS_LTRIGGER: *TriggerCalibration
     *AXIS_LTHUMBX: &ThumbCalibration
         <<: *TriggerCalibration
+        value_at_start: 0
     *AXIS_LTHUMBY: *ThumbCalibration
     *AXIS_RTHUMBX: *ThumbCalibration
     *AXIS_RTHUMBY: *ThumbCalibration

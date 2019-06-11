@@ -456,6 +456,21 @@ class TestInputHandler(object):
         assert input_handler.clamp_axis_value(a, -1) == 0
         assert input_handler.clamp_axis_value(a, 1) == 1
         assert input_handler.clamp_axis_value(a, .4) == .7
+        assert input_handler.clamp_axis_value(a, 1.01) == 1
+        assert input_handler.clamp_axis_value(a, -1.01) == 0
+        assert input_handler.clamp_axis_value(a, .0009) > .5
+        assert input_handler.clamp_axis_value(a, .00009) == .5
+
+        # reverse min and max
+
+        input_handler.axis_calibration[a] = {
+            "min": 1,
+            "max": -1,
+            "value_at_start": -1.0
+        }
+
+        assert input_handler.clamp_axis_value(a, -1) == 1
+        assert input_handler.clamp_axis_value(a, 1) == 0
 
     def test_axis_motion(self, input_handler):
 

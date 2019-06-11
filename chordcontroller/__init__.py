@@ -771,9 +771,14 @@ class InputHandler(object):
         #self.scheduled_events += (axis_events)
 
     def clamp_axis_value(self, axis_id, raw_axis_value):
+
         calibration = self.axis_calibration[axis_id]
+        min_value = calibration["min"]
+        max_value = calibration["max"]
         rounded_axis_value = round(raw_axis_value, 3)
-        return (rounded_axis_value - calibration["min"]) / (calibration["max"] - calibration["min"])
+
+        v = (rounded_axis_value - min_value) / (max_value - min_value)
+        return max(min(v, 1.0), 0.0)
 
     def _hat_key(self, hat, value):
         return "{0}:{1}:{2}".format(hat, value.x, value.y)
