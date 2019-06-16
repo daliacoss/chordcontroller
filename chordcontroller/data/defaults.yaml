@@ -11,15 +11,6 @@ constants: # defines the "anchors" that are used later on in this yaml file
     - &BUTTON_LTHUMB 9
     - &BUTTON_RTHUMB 10
     - &HAT_DPAD 0
-    - &HAT_DPAD_NEUTRAL 0:0:0
-    - &HAT_DPAD_UP 0:0:1
-    - &HAT_DPAD_DOWN 0:0:-1
-    - &HAT_DPAD_DOWNRIGHT 0:1:-1
-    - &HAT_DPAD_UPRIGHT 0:1:1
-    - &HAT_DPAD_RIGHT 0:1:0
-    - &HAT_DPAD_LEFT 0:-1:0
-    - &HAT_DPAD_DOWNLEFT 0:-1:-1
-    - &HAT_DPAD_UPLEFT 0:-1:1
     - &AXIS_LTHUMBX 0
     - &AXIS_LTHUMBY 1
     - &AXIS_RTHUMBX 2
@@ -54,22 +45,22 @@ startup:
 mappings:
     default:
         hats:
-            *HAT_DPAD_UP:
+            UP:
                 - do: [play_scale_position, 0]
                   behavior: momentary #default
-            *HAT_DPAD_DOWN:
+            DOWN:
                 - do: [play_scale_position, 0]
-            *HAT_DPAD_DOWNRIGHT:
+            DOWNRIGHT:
                 - do: [play_scale_position, 1,]
-            *HAT_DPAD_UPRIGHT:
+            UPRIGHT:
                 - do: [play_scale_position, 2,]
-            *HAT_DPAD_RIGHT:
+            RIGHT:
                 - do: [play_scale_position, 3,]
-            *HAT_DPAD_LEFT:
+            LEFT:
                 - do: [play_scale_position, 4,]
-            *HAT_DPAD_DOWNLEFT:
+            DOWNLEFT:
                 - do: [play_scale_position, 5,]
-            *HAT_DPAD_UPLEFT:
+            UPLEFT:
                 - do: [play_scale_position, 6,]
         buttons:
             *BUTTON_START:
@@ -124,10 +115,10 @@ mappings:
                   behavior: latch
                   on_release: true
         hats:
-            *HAT_DPAD_RIGHT:
+            RIGHT:
                 - do: [inc, octave, 1]
                   behavior: latch
-            *HAT_DPAD_LEFT:
+            LEFT:
                 - do: [dec, octave, 1 ]
                   behavior: latch
     change_harmony:
@@ -168,27 +159,27 @@ mappings:
                   behavior: latch
                   on_release: true
         hats:
-            *HAT_DPAD_UP:
+            UP:
                 - do: [set_next, tonic, !immutable {scale_degree: 0, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_DOWN:
+            DOWN:
                 - do: [set_next, tonic, !immutable {scale_degree: 0, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_DOWNRIGHT:
+            DOWNRIGHT:
                 - do: [set_next, tonic, !immutable {scale_degree: 1, calculate_immediately: true},]
                   behavior: latch
-            *HAT_DPAD_UPRIGHT:
+            UPRIGHT:
                 - do: [set_next, tonic, !immutable {scale_degree: 2, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_RIGHT:
+            RIGHT:
                 - do: [set_next, tonic, !immutable {scale_degree: 3, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_LEFT:
+            LEFT:
                 - do: [set_next, tonic, !immutable {scale_degree: 4, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_DOWNLEFT:
+            DOWNLEFT:
                 - do: [set_next, tonic, !immutable {scale_degree: 5, calculate_immediately: true}]
                   behavior: latch
-            *HAT_DPAD_UPLEFT:
+            UPLEFT:
                 - do: [set_next, tonic, !immutable {scale_degree: 6, calculate_immediately: true}]
                   behavior: latch

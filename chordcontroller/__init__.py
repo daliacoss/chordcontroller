@@ -97,15 +97,17 @@ class Vector(namedtuple("Vector", ("x", "y"))):
     def is_diagonal(self):
         return self[0] and self[1]
 
-Vector.DOWN = Vector(0,-1)
-Vector.UP = Vector(0,1)
-Vector.RIGHT = Vector(1,0)
-Vector.LEFT = Vector(-1,0)
-Vector.DOWNRIGHT = Vector(1,-1)
-Vector.DOWNLEFT = Vector(-1,-1)
-Vector.UPRIGHT = Vector(1,1)
-Vector.UPLEFT = Vector(-1,1)
-Vector.NEUTRAL = Vector(0,0)
+directions = dict(
+    DOWN = Vector(0,-1),
+    UP = Vector(0,1),
+    RIGHT = Vector(1,0),
+    LEFT = Vector(-1,0),
+    DOWNRIGHT = Vector(1,-1),
+    DOWNLEFT = Vector(-1,-1),
+    UPRIGHT = Vector(1,1),
+    UPLEFT = Vector(-1,1),
+    NEUTRAL = Vector(0,0),
+)
 
 class Event(object):
     def __init__(self, _type, **params):
@@ -788,7 +790,10 @@ class InputHandler(object):
         return max(min(v, 1.0), 0.0)
 
     def _hat_key(self, hat, value):
-        return "{0}:{1}:{2}".format(hat, value.x, value.y)
+        for k, v in directions.items():
+            if value == v:
+                return k
+        #return "{0}:{1}:{2}".format(hat, value.x, value.y)
 
     def _get_hat_actions(self, keymap, hat_key):
         return keymap.get("hats", {}).get(hat_key, [])
@@ -862,7 +867,7 @@ class InputHandler(object):
 
                 prev_value = self._most_recent_hat_vector.get(event.hat)
                 value = Vector(*event.value)
-                is_neutral = (value == Vector.NEUTRAL)
+                is_neutral = (value == directions["NEUTRAL"])
                 hat_calibration = self.hat_calibration.get(event.hat, self.hat_calibration["default"])
 
                 # easy diagonals: if the most recent dpad event was a diagonal
