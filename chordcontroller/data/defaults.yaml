@@ -1,39 +1,39 @@
-constants: # defines the "anchors" that are used later on in this yaml file
-    - &BUTTON_A 0
-    - &BUTTON_B 1
-    - &BUTTON_X 2
-    - &BUTTON_Y 3
-    - &BUTTON_LB 4
-    - &BUTTON_RB 5
-    - &BUTTON_BACK 6
-    - &BUTTON_START 7
-    - &BUTTON_XBOX 8
-    - &BUTTON_LTHUMB 9
-    - &BUTTON_RTHUMB 10
-    - &HAT_DPAD 0
-    - &AXIS_LTHUMBX 0
-    - &AXIS_LTHUMBY 1
-    - &AXIS_RTHUMBX 2
-    - &AXIS_RTHUMBY 3
-    - &AXIS_RTRIGGER 4
-    - &AXIS_LTRIGGER 5
+constants:
+    BUTTON_A: 0
+    BUTTON_B: 1
+    BUTTON_X: 2
+    BUTTON_Y: 3
+    BUTTON_LB: 4
+    BUTTON_RB: 5
+    BUTTON_BACK: 6
+    BUTTON_START: 7
+    BUTTON_XBOX: 8
+    BUTTON_LTHUMB: 9
+    BUTTON_RTHUMB: 10
+    HAT_DPAD: 0
+    AXIS_LTHUMBX: 0
+    AXIS_LTHUMBY: 1
+    AXIS_RTHUMBX: 2
+    AXIS_RTHUMBY: 3
+    AXIS_RTRIGGER: 4
+    AXIS_LTRIGGER: 5
 
 axis_calibration:
     default:
         min: -1.0
         max: 1.0
         value_at_start: 0
-    *AXIS_RTRIGGER: &TriggerCalibration
+    AXIS_RTRIGGER: &TriggerCalibration
         min: -1.0   # axis value will be rounded to nearest thousandth
         max: 1.0
         value_at_start: -1.0
-    *AXIS_LTRIGGER: *TriggerCalibration
-    *AXIS_LTHUMBX: &ThumbCalibration
+    AXIS_LTRIGGER: *TriggerCalibration
+    AXIS_LTHUMBX: &ThumbCalibration
         <<: *TriggerCalibration
         value_at_start: 0
-    *AXIS_LTHUMBY: *ThumbCalibration
-    *AXIS_RTHUMBX: *ThumbCalibration
-    *AXIS_RTHUMBY: *ThumbCalibration
+    AXIS_LTHUMBY: *ThumbCalibration
+    AXIS_RTHUMBX: *ThumbCalibration
+    AXIS_RTHUMBY: *ThumbCalibration
 
 hat_calibration:
     default:
@@ -63,42 +63,42 @@ mappings:
             UPLEFT:
                 - do: [play_scale_position, 6,]
         buttons:
-            *BUTTON_START:
+            BUTTON_START:
                 - do: [mode, change_octave]
                   behavior: latch
-            *BUTTON_BACK:
+            BUTTON_BACK:
                 - do: [mode, change_harmony]
                   behavior: latch
-            *BUTTON_LTHUMB:
+            BUTTON_LTHUMB:
                 - do: [mode, change_bass]
                   behavior: latch
-            *BUTTON_RTHUMB:
+            BUTTON_RTHUMB:
                 - do: [mode, change_tonic]
                   behavior: latch
-            *BUTTON_RB:
+            BUTTON_RB:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary #default
-            *BUTTON_LB:
+            BUTTON_LB:
                 - do: [send_cc, 64, 127] # sustain pedal
                   behavior: latch
                 - do: [send_cc, 64, 0]
                   behavior: latch
                   on_release: true
-            *BUTTON_X:
+            BUTTON_X:
                 - do: [inc, extension_modifier, 1]
-            *BUTTON_Y:
+            BUTTON_Y:
                 - do: [inc, extension_modifier, 1]
-            *BUTTON_A:
+            BUTTON_A:
                 - do: [set, quality_modifier, 1]
-            *BUTTON_B:
+            BUTTON_B:
                 - do: [set, quality_modifier, 2]
         axes:
-            *AXIS_RTRIGGER:
+            AXIS_RTRIGGER:
                 - do: [set, velocity,]
                   curve: 1.7
                   value_at_min: 0x70
                   value_at_max: 0
-            *AXIS_LTRIGGER:
+            AXIS_LTRIGGER:
                 - do: [set, voicing,]
                   value_at_min: 0
                   value_at_max: 4
@@ -110,7 +110,7 @@ mappings:
                       - 1
     change_octave:
         buttons:
-            *BUTTON_START: &BackToDefault
+            BUTTON_START: &BackToDefault
                 - do: [mode, default]
                   behavior: latch
                   on_release: true
@@ -123,35 +123,35 @@ mappings:
                   behavior: latch
     change_harmony:
         buttons:
-            *BUTTON_BACK: *BackToDefault
-            *BUTTON_A:
+            BUTTON_BACK: *BackToDefault
+            BUTTON_A:
                 - do: [set, harmony, 0] # single voice
                   behavior: latch
-            *BUTTON_X:
+            BUTTON_X:
                 - do: [set, harmony, 1] # harmony a third above root
                   behavior: latch
-            *BUTTON_Y:
+            BUTTON_Y:
                 - do: [set, harmony, 2] # triad
                   behavior: latch
     change_bass:
         buttons:
-            *BUTTON_LTHUMB: *BackToDefault
-            *BUTTON_A:
+            BUTTON_LTHUMB: *BackToDefault
+            BUTTON_A:
                 - do: [set, bass, 0]
                   behavior: latch
-            *BUTTON_B: &SetBass1
+            BUTTON_B: &SetBass1
                 - do: [set, bass, 1]
                   behavior: latch
-            *BUTTON_X: *SetBass1
-            *BUTTON_Y:
+            BUTTON_X: *SetBass1
+            BUTTON_Y:
                 - do: [set, bass, 2]
                   behavior: latch
     change_tonic:
         buttons:
-            *BUTTON_RB:
+            BUTTON_RB:
                 - do: [set, tonic_offset, -1]
                   behavior: momentary
-            *BUTTON_RTHUMB:
+            BUTTON_RTHUMB:
                 - do: [mode, default]
                   behavior: latch
                   on_release: true

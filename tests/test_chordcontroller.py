@@ -341,6 +341,28 @@ def test_commands_from_input_mapping(mapping):
     expected = set((("set", "octave", 4), ("set", "octave", 5), ("play_scale_position", 1), ("play_scale_position", 0)))
     assert cmds == expected
 
+def test_process_constants():
+    from chordcontroller import process_constants
+    
+    constants = dict(BUTTON_A=BUTTON_A, BUTTON_B=BUTTON_B)
+    d = {
+        "default":{
+            "buttons":{
+                "BUTTON_A":"foo",
+                "BUTTON_B":"bar",
+            }
+        },
+        "my_mode":{
+            "buttons":{
+                "BUTTON_B":"baz",
+            }
+        }
+    }
+    new_d = process_constants(constants, d, 2)
+    assert len(new_d) == 2
+    assert new_d["default"]["buttons"] == {BUTTON_A: "foo", BUTTON_B: "bar"}
+    assert new_d["my_mode"]["buttons"] == {BUTTON_B: "baz"}
+
 class TestInstrument(object):
 
     @pytest.mark.parametrize("input_value,expected_value", [

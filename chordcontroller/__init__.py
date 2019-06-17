@@ -737,6 +737,28 @@ def value_in_range(percent, value_at_min, value_at_max, curve=1.0, inclusive=Tru
         else:
             return i * x + value_at_min
 
+def process_constants(constants, m, level=0):
+    """
+    Return a copy of m in which each key is replaced with constants[orig_key].
+    For each key not found in constants, orig_key is used.
+    """
+
+    d = {}
+
+    for k, v in m.items():
+
+        if level and hasattr(v, "get"):
+            v = process_constants(constants, v, level - 1)
+
+        try:
+            new_k = constants[k]
+        except KeyError:
+            new_k = k
+
+        d[new_k] = v
+
+    return d
+
 class InputHandler(object):
 
     def __init__(self, config=None, joystick_index=-1, joystick_autoset=True):
@@ -753,9 +775,16 @@ class InputHandler(object):
         self.joystick_autoset = joystick_autoset
         self._most_recent_hat_vector = {0: Vector(0,0)}
 
-        for k in ["axis_calibration", "hat_calibration", "mappings"]:
+        for k in ["constants", "axis_calibration", "hat_calibration", "mappings"]:
             defaults[k].update(config.get(k, {}))
+
+            if k == "mappings":
+                defaults[k] = process_constants(self.constants, defaults[k], level=2)  
+            elif k != "constants":
+                defaults[k] = process_constants(self.constants, defaults[k])
+
             setattr(self, k, defaults[k])
+
         self.startup_commands = config.get("startup") or defaults["startup"]
 
         self.mode = "default"
@@ -763,6 +792,7 @@ class InputHandler(object):
 
         self._uncalibrated_axes = set()
         self._toggle_states = {}
+
 
     @property
     def joystick_index(self):
