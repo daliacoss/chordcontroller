@@ -22,18 +22,6 @@ axis_calibration:
     default:
         min: -1.0
         max: 1.0
-        value_at_start: 0
-    AXIS_RTRIGGER: &TriggerCalibration
-        min: -1.0   # axis value will be rounded to nearest thousandth
-        max: 1.0
-        value_at_start: -1.0
-    AXIS_LTRIGGER: *TriggerCalibration
-    AXIS_LTHUMBX: &ThumbCalibration
-        <<: *TriggerCalibration
-        value_at_start: 0
-    AXIS_LTHUMBY: *ThumbCalibration
-    AXIS_RTHUMBX: *ThumbCalibration
-    AXIS_RTHUMBY: *ThumbCalibration
 
 hat_calibration:
     default:

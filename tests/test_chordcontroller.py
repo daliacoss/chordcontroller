@@ -61,13 +61,9 @@ def instrument():
     import chordcontroller
     return chordcontroller.Instrument(octave=5)
 
-def map_constructor(loader, node):
-    return Map(loader.construct_mapping(node))
-
 @pytest.fixture
 def input_handler():
     from chordcontroller import InputHandler
-    #with pkg_resources.resource_stream("chordcontroller", "data/defaults.yaml") as defaults:
     ih = InputHandler()
     return ih
 
