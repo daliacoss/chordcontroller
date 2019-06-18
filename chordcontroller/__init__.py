@@ -109,24 +109,6 @@ directions = dict(
     NEUTRAL = Vector(0,0),
 )
 
-class Event(object):
-    def __init__(self, _type, **params):
-        self.__dict__ = params
-        self.type = _type
-
-class ButtonEvent(Event):
-    def __init__(self, button, is_down=True, joy=0):
-        super().__init__(_type = (JOYBUTTONDOWN if is_down else JOYBUTTONUP), joy = joy, button = button)
-
-class HatEvent(Event):
-    def __init__(self, value, hat=0, joy=0):
-        super().__init__(value=value, _type=JOYHATMOTION, hat=hat, joy=joy)
-
-class AxisEvent(Event):
-    def __init__(self, value, axis, joy=0):
-        super().__init__(value=value, _type=JOYAXISMOTION, axis=axis, joy=joy)
-
-
 class UndoError(Exception):
     pass
 
@@ -279,11 +261,14 @@ class SetMode(SetAttribute):
         super().__init__(obj, "mode", mode_name)
 
 SendCC = def_command("send_cc", "send_cc", ["cn", "cv"])
+SendCC.__name__ = "SendCC"
+
 CommitAttribute = def_command("commit", "commit", ["key"])
 def _revert(self):
     pass
 CommitAttribute.revert = _revert
 del _revert
+CommitAttribute.__name__ = "CommitAttribute"
 
 class Invoker(object):
 
