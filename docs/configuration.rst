@@ -91,10 +91,15 @@ Here is the default configuration:
         default:
             easy_diagonals: true
 
+Commands
+--------
+
+TODO
+
 Executing commands at startup
 -----------------------------
 
-todo
+TODO
 
 Mappings
 --------

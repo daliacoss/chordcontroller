@@ -46,7 +46,8 @@ html_theme = 'alabaster'
 
 html_theme_options = {
     "description":  'Turn your game controller into a MIDI controller!',
-    "extra_nav_links": {"Home": "index.html"}
+    "extra_nav_links": {"Home": "index.html"},
+    "sidebar_width": "250px",
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
